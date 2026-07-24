@@ -1,0 +1,8 @@
+[package]
+name = "mayo-c-rain-sys"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+bindgen = "0.71.0"
+vole-rainhash-then-mayo-sys = { path = "../vole-rainhash-then-mayo-sys" }

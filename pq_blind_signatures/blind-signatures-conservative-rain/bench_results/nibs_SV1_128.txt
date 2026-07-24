@@ -1,0 +1,10 @@
+================ NIBS RainHash+MAYO [SV1_128] ================
+keygen_signer      : 2.870 ms
+keygen_recipient   : 0.252 ms
+issue              : 6.108 ms
+obtain (prove)     : 151.226 ms
+verify             : 147.210 ms
+presignature |Spre| : 0.443 KB
+signature    |sigma|: 26.078 KB
+iterations (mean over): 20
+============================================================

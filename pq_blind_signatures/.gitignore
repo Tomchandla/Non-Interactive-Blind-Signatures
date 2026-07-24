@@ -1,0 +1,7 @@
+*/target
+*/bin
+*/Cargo.lock
+.vscode/*
+**/*Zone.Identifier
+build.log
+rainhash_plain/build-dir/*

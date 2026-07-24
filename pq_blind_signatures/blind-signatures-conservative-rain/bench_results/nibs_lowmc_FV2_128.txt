@@ -1,0 +1,12 @@
+================ NIBS LowMC+MAYO [FV2_128] ================
+lowmc setup (one-time, shared): 236.925 ms
+keygen_signer      : 2.673 ms
+keygen_recipient   : 0.051 ms
+issue              : 5.487 ms
+obtain (prove)     : 56.017 ms
+verify             : 52.772 ms
+presignature |Spre| : 0.443 KB
+signature    |sigma|: 43.754 KB
+iterations (mean over): 20
+instances: PRF(256,256,85,13r,d=2^64)  HASH(256,256,85,22r,d=2^256)  Gad2=Rain(512,7r)
+==========================================================
