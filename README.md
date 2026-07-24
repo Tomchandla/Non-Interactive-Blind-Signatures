@@ -63,7 +63,7 @@ GadM  : m   = E_prf_K(PT(δ_m, nonce))             LowMC 13r    output == public
 
 **Domain separation.** The bytes `δ_pk`, `δ_m`, `δ_com` keep the LowMC uses disjoint. Without them the signer — who knows `pkR` and `nonce` — could relate `m` to issuance-time values and blindness would fail; `m` depending on `K` (which the signer never sees) is what makes it unlinkable.
 
-**Salt gotcha.** MAYO1's salt is 24 bytes, so it straddles the 128-bit lane boundary of the Rain input block (lane 2 + half of lane 3); both lanes must be witness-loaded. Treating lane 3 as constant pad silently truncates the salt in-circuit and is invisible to honest-execution testing. Revisit at L3/L5 (32- and 40-byte salts).
+**Salting** MAYO1's salt is 24 bytes, so it straddles the 128-bit lane boundary of the Rain input block (lane 2 + half of lane 3); both lanes must be witness-loaded. Treating lane 3 as constant pad silently truncates the salt in-circuit and is invisible to honest-execution testing. Revisit at L3/L5 (32- and 40-byte salts).
 
 ---
 
@@ -78,10 +78,8 @@ Gad2 input block                     512
 Gad2 Rain states         (7 × 512)  3584
 Gad2 output block                    512
                                    -----
-WITNESS_SIZE_BITS                  17408 bits = 2176 B   (+ MAYO preimage s_M at offset 17408)
+WITNESS_SIZE_BITS                  17408 bits = 2176 B   (+ MAYO preimage s_M)
 ```
-
-12,833 constraints total: 256 per LowMC round (255 quadratic S-box + 1 linear), 4 inversion + 4 output-consistency per Rain round, plus the 512 seam/output equalities.
 
 ## Measured results (preliminary — correctness verification in progress)
 
@@ -93,8 +91,6 @@ WITNESS_SIZE_BITS                  17408 bits = 2176 B   (+ MAYO preimage s_M at
 | Obtain / Verify (ms) | 54 / 52 | 56 / 53 | 122 / 127 | 62 / 57 |
 
 Signer→recipient communication is 0.459 KB (presig + nonce), ~14–20% below [BGY25]'s 0.68 KB. LowMC instance generation is a one-time 237 ms cost.
-
-**Vs the interactive scheme [BBBMR26]** (16.5 / 27.8 KB s/f): 1.55× / 1.58× larger. The gap has a closed form — the witness enters the proof once per repetition, so Δ|σ| = τ · Δw = τ · 1024 B: the interactive protocol proves a two-gadget 9216-bit circuit, while removing the round trip forces `GadA`, `Gad1`, `GadM` and their key material in-circuit (the 12800-bit LowMC region in place of one 4608-bit Rain gadget). The cost of non-interactivity is structural, not an implementation artefact.
 
 **Vs lattice NIBS [BGY25]** (306 KB unbatched, conservative): ~12× smaller at SV1, ~7× at FV1 — under multivariate (UOV/WMQ) + LowMC assumptions rather than lattices. BGY25's efficiency story is *amortized* batching, out of scope here, so this compares single-shot sizes only.
 
