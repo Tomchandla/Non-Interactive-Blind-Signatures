@@ -20,12 +20,12 @@ impl NibsLowmc {
         additional_r: &mut [u8],
     ) -> (DerivedMessageType, SignatureType) {
         let pk_r = derive_pkr(&sk_r.key, &sk_r.opening);
-        let com = derive_com(&pk_r, nonce);
+        let msg = [pk_r.as_slice(), nonce.as_slice()].concat();
 
         // check the presignature before doing any expensive proving
         assert!(
-            self.mayo.verify_fixed_length_rain(pk, &com, presig),
-            "presignature does not MAYO-verify against com(pkR, nonce)"
+            self.mayo.verify_fixed_length_rain(pk, &msg, presig),
+            "presignature does not MAYO-verify"
         );
 
         let mut s = presig[..(presig.len() - self.mayo.mayo_params.salt_bytes)].to_vec();
