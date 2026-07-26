@@ -1,6 +1,6 @@
 use super::{
     DerivedMessageType, NibsLowmc, NonceType, PkType, PresignatureType, RecipientSkType,
-    SignatureType,
+    SignatureType, presig_message
 };
 use crate::derive::{derive_message, derive_pkr};
 
@@ -15,19 +15,17 @@ impl NibsLowmc {
         additional_r: &mut [u8],
     ) -> (DerivedMessageType, SignatureType) {
         let pk_r = derive_pkr(&sk_r.key, &sk_r.opening);
-        let msg = [pk_r.as_slice(), nonce.as_slice()].concat();
-
+        let msg = presig_message(&pk_r, nonce);
+        
         // check the presignature before doing any proving
         assert!(
             self.mayo.verify_fixed_length_rain(pk, &msg, presig),
-            "presignature does not MAYO-verify"
+            "presignature does not MAYO-verify against pkR || nonce"
         );
 
         let mut s = presig[..(presig.len() - self.mayo.mayo_params.salt_bytes)].to_vec();
         let mut salt = presig[(presig.len() - self.mayo.mayo_params.salt_bytes)..].to_vec();
-
         let mut m = derive_message(&sk_r.key, nonce);
-
         let mut key_w = sk_r.key.clone();
         let mut open_w = sk_r.opening.clone();
         let mut nonce_w = nonce.clone();
