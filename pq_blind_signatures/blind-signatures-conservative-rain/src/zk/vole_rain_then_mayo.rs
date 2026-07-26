@@ -1,13 +1,5 @@
-//! Wrapper around the C prove/verify entry points for the MIXED
-//! LowMC + Rain NIBS circuit:
-//!
-//!   prove:  (epk, m_pub, s, sk_r, open, nonce, salt, additional_r)
-//!   verify: (proof, epk, m_pub, additional_r)
-//!
-//! sk_r here is the raw 256-bit LowMC key K; open is the 128-bit commitment
-//! opening; nonce the signer-sampled 128-bit nonce; salt MAYO's 128-bit
-//! signature salt. ProveFn in parameters.rs mirrors this order. Re-run the
-//! sys-crate bindgen after touching faest.h.
+// Wrapper around the C prove/verify entry points for the 
+// mixed LowMC + Rain NIBS circuit
 
 use crate::zk::{
     ZKType,
@@ -37,12 +29,6 @@ impl VOLERainThenMAYO {
         }
     }
 
-    /// Proof for the NIBS relation (mixed LowMC + Rain):
-    ///   GadA (LowMC PRF) : E^PRF_skR(PT(DOM_PK, open))  = pkR   (witness)
-    ///   Gad1 (LowMC MMO) : MMO(pkR, PT(DOM_COM, nonce)) = com   (wire expr)
-    ///   Gad2 (Rain)      : Rain(com | salt | cap)       = t     (witness)
-    ///   MAYO             : T*(s)                        = t     (witness s)
-    ///   GadM (LowMC PRF) : E^PRF_skR(PT(DOM_M, nonce))  = m     (PUBLIC m)
     #[allow(clippy::too_many_arguments)]
     pub fn prove(
         &self,
