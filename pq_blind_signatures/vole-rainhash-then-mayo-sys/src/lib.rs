@@ -5,7 +5,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-pub mod lowmc;
+pub mod lowmc; // Only addition to this file.
 
 #[cfg(test)]
 mod test_rain {
