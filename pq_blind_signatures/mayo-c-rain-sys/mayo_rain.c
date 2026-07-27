@@ -16,6 +16,33 @@
 
 #include <stdio.h>
 
+// pkR(32) || nonce(16).
+#define NIBS_MSG_BYTES 48
+
+static void nibs_rain2_target(unsigned char *tenc, size_t tenc_len,
+                              const unsigned char *m,
+                              const unsigned char *salt, int salt_bytes) {
+    unsigned char b1[64];
+    unsigned char h1[64];
+    unsigned char b2[64];
+
+    // B1 = m || salt[0..16]
+    memcpy(b1, m, NIBS_MSG_BYTES);
+    memcpy(b1 + NIBS_MSG_BYTES, salt, 64 - NIBS_MSG_BYTES);
+
+    rain_hash_512_7_c(h1, 64, b1, 64);
+
+    // B2 = salt[16..salt_bytes] || 0xff-pad, chained with h1
+    memset(b2, 0xff, 64);
+    memcpy(b2, salt + (64 - NIBS_MSG_BYTES),
+           (size_t)salt_bytes - (64 - NIBS_MSG_BYTES));
+    for (int i = 0; i < 64; i++) {
+        b2[i] ^= h1[i];
+    }
+
+    rain_hash_512_7_c(tenc, tenc_len, b2, 64);
+}
+
 int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned char *sig,
               size_t *siglen, const unsigned char *m,
               size_t mlen, const unsigned char *csk) {
@@ -31,13 +58,8 @@ int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned
     const unsigned char *seed_sk;
     alignas(32) sk_t sk;                    // secret data
     unsigned char Ox[V_MAX];        // secret data
-    // unsigned char tmp[DIGEST_BYTES_MAX + SALT_BYTES_MAX];
-    // therefore no overflow can occur
-    // unsigned char tmp[DIGEST_BYTES_MAX + SALT_BYTES_MAX + SK_SEED_BYTES_MAX + 1];
-    unsigned char tmp[DIGEST_BYTES_MAX + SALT_BYTES_MAX + SK_SEED_BYTES_MAX + 1];
-    // maximum input size for rain
-    unsigned char tmp_t_rain_input[64] = {0};
-    memset(tmp_t_rain_input, 0xff, 64); // changed this from 0x00 becuase of the zero s-box problem
+    // salt/V derivation buffer: message(48) || salt || seed_sk || ctr
+    unsigned char tmp[NIBS_MSG_BYTES + SALT_BYTES_MAX + SK_SEED_BYTES_MAX + 1];
     unsigned char *ctrbyte;
     unsigned char *vi;
 
@@ -51,7 +73,6 @@ int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned
     const int param_r_bytes = PARAM_r_bytes(p);
     const int param_sig_bytes = PARAM_sig_bytes(p);
     const int param_A_cols = PARAM_A_cols(p);
-    const int param_digest_bytes = PARAM_digest_bytes(p);
     const int param_sk_seed_bytes = PARAM_sk_seed_bytes(p);
     const int param_salt_bytes = PARAM_salt_bytes(p);
 
@@ -62,15 +83,12 @@ int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned
 
     seed_sk = csk;
 
-
-    // hash message
-    // shake256(tmp, param_digest_bytes, m, mlen);
-    if (mlen != (size_t)param_digest_bytes)
+    // The NIBS message is pkR || nonce, fixed at 48 bytes
+    if (mlen != (size_t)NIBS_MSG_BYTES)
     {
         goto err;
     }
-    memcpy(tmp, m, param_digest_bytes);
-    memcpy(tmp_t_rain_input, m, param_digest_bytes);
+    memcpy(tmp, m, NIBS_MSG_BYTES);
 
     uint64_t *P1 = sk.p;
     uint64_t *L  = P1 + PARAM_P1_limbs(p);
@@ -87,31 +105,31 @@ int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned
 
     // choose the randomizer
     #if defined(PQM4) || defined(HAVE_RANDOMBYTES_NORETVAL)
-    randombytes(tmp + param_digest_bytes, param_salt_bytes);
+    randombytes(tmp + NIBS_MSG_BYTES, param_salt_bytes);
     #else
-    if (randombytes(tmp + param_digest_bytes, param_salt_bytes) != MAYO_OK) {
+    if (randombytes(tmp + NIBS_MSG_BYTES, param_salt_bytes) != MAYO_OK) {
         ret = MAYO_ERR;
         goto err;
     }
     #endif
 
     // hashing to salt
-    memcpy(tmp + param_digest_bytes + param_salt_bytes, seed_sk,
+    memcpy(tmp + NIBS_MSG_BYTES + param_salt_bytes, seed_sk,
            param_sk_seed_bytes);
     shake256(salt, param_salt_bytes, tmp,
-             param_digest_bytes + param_salt_bytes + param_sk_seed_bytes);
+             NIBS_MSG_BYTES + param_salt_bytes + param_sk_seed_bytes);
 
 #ifdef ENABLE_CT_TESTING
     VALGRIND_MAKE_MEM_DEFINED(salt, SALT_BYTES_MAX); // Salt is not secret
 #endif
 
     // hashing to t
-    memcpy(tmp + param_digest_bytes, salt, param_salt_bytes);
-    memcpy(tmp_t_rain_input + param_digest_bytes, salt, param_salt_bytes);
-    ctrbyte = tmp + param_digest_bytes + param_salt_bytes + param_sk_seed_bytes;
+    memcpy(tmp + NIBS_MSG_BYTES, salt, param_salt_bytes);
+    ctrbyte = tmp + NIBS_MSG_BYTES + param_salt_bytes + param_sk_seed_bytes;
 
     // --- This is the only part where we replace shake with rain ---
-    rain_hash_512_7_c(tenc, param_m_bytes, tmp_t_rain_input, 64);
+    // t = Rain2( pkR || nonce || salt || 0xff-pad ), two blocks
+    nibs_rain2_target(tenc, param_m_bytes, m, salt, param_salt_bytes);
     // ---
 
     decode(tenc, t, param_m); // may not be necessary
@@ -120,7 +138,7 @@ int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned
         *ctrbyte = (unsigned char)ctr;
 
         shake256(V, param_k * param_v_bytes + param_r_bytes, tmp,
-                 param_digest_bytes + param_salt_bytes + param_sk_seed_bytes + 1);
+                 NIBS_MSG_BYTES + param_salt_bytes + param_sk_seed_bytes + 1);
 
         // decode the v_i vectors
         for (int i = 0; i <= param_k - 1; ++i) {
@@ -200,15 +218,12 @@ int mayo_rain_verify_fixed_length_input(const mayo_params_t *p, const unsigned c
     unsigned char y[2 * M_MAX] = {0}; // extra space for reduction mod f(X)
     unsigned char s[K_MAX * N_MAX];
     uint64_t pk[P1_LIMBS_MAX + P2_LIMBS_MAX + P3_LIMBS_MAX] = {0};
-    unsigned char tmp[64] = {0};
-    memset(tmp, 0xff, 64); // changed this from 0x00 becuase of the zero s-box problem
 
     const int param_m = PARAM_m(p);
     const int param_n = PARAM_n(p);
     const int param_k = PARAM_k(p);
     const int param_m_bytes = PARAM_m_bytes(p);
     const int param_sig_bytes = PARAM_sig_bytes(p);
-    const int param_digest_bytes = PARAM_digest_bytes(p);
     const int param_salt_bytes = PARAM_salt_bytes(p);
 
     int ret = mayo_expand_pk(p, cpk, pk);
@@ -232,32 +247,16 @@ int mayo_rain_verify_fixed_length_input(const mayo_params_t *p, const unsigned c
     }
 #endif
 
-    // hash m
-    // shake256(tmp, param_digest_bytes, m, mlen);
-    if (mlen != (size_t)param_digest_bytes)
+    // check if the NIBS message is fixed at 48 bytes
+    if (mlen != (size_t)NIBS_MSG_BYTES)
     {
         return MAYO_ERR;
     }
-    memcpy(tmp, m, param_digest_bytes);
 
-    // compute t
-    memcpy(tmp + param_digest_bytes, sig + param_sig_bytes - param_salt_bytes,
-           param_salt_bytes);
-    // --- This is the only modification where shake256 is replaced with rain 
-    rain_hash_512_7_c(tEnc, param_m_bytes, tmp, 64);
-
-    // printf("rain input\n");
-    // for (size_t i = 0; i < 64; i++) {
-    //     printf("%02x ", tmp[i]);
-    // }
-    // printf("\n");
-
-    // printf("rain output\n");
-    // for (size_t i = 0; i < 64; i++) {
-    //     printf("%02x ", tEnc[i]);
-    // }
-    // printf("\n");
-
+    // compute new NIBS t (this calls rain_hash_512_7_c)
+    nibs_rain2_target(tEnc, param_m_bytes, m,
+                      sig + param_sig_bytes - param_salt_bytes,
+                      param_salt_bytes);
     // ---
     decode(tEnc, t, param_m);
 
