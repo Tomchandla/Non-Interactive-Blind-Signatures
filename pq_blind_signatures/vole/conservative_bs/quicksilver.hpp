@@ -424,6 +424,9 @@ public:
 
     const block_secpar<S>* macs;
 
+    inline const char* qs_dbg_region = "?";         // remove after debugging
+    inline size_t qs_dbg_idx = 0, qs_dbg_fails = 0; // remove after debugging
+
     // Initialize a prover's quicksilver_state. challenge must have length
     // QUICKSILVER_CHALLENGE_BYTES.
     quicksilver_state(const uint8_t* witness, const block_secpar<S>* macs, size_t num_constraints,
@@ -622,11 +625,13 @@ public:
             // uint64_t tmp = 0;
             // memcpy(&tmp, &x_max.value().data, sizeof(tmp));
             // std::cout << "should b 0: " << std::hex << std::setw(16) << std::setfill('0') << tmp << "\n";
-            static size_t nibs_idx = 0;
-            if (!(x_max.value() == poly_secpar<S>::set_zero()))
-                fprintf(stderr, "UNSATISFIED constraint #%zu\n", nibs_idx);
-            ++nibs_idx;
-            assert(x_max.value() == poly_secpar<S>::set_zero());
+            ++qs_dbg_idx;
+            if (!(x_max.value() == poly_secpar<S>::set_zero())) {
+                ++qs_dbg_fails;
+                fprintf(stderr, "UNSAT deg=%d global#%zu region=%s\n",
+                        (int)deg, qs_dbg_idx, qs_dbg_region);
+            }
+            // assert(x_max.value() == poly_secpar<S>::set_zero());
             FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
             for (size_t i = 0; i < max_degree; ++i)
             {
