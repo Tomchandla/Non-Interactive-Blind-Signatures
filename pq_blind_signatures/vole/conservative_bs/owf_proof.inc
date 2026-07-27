@@ -1813,8 +1813,10 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
     #endif
 
     #if defined WITH_RAINHASH
+    qs_dbg_region = "lowmc";
     nibs_lowmc_constraints<QS, P>(qs_state, pk);
 
+    qs_dbg_region = "rain1";
     // Rain gadget 2, block 1: h1 = Rain(pkR | nonce | salt[0..16])
     {
         const uint8_t* lc[4] = { nullptr, nullptr, nullptr, nullptr };
@@ -1829,6 +1831,7 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
     // Lanes 1-3 are pure pad, so they bind as field elements. Lane 0 mixes
     // the salt tail (prover-chosen, deliberately unbound) with 64 pad bits,
     // so those 64 bits are bound individually.
+    qs_dbg_region = "chain";
     for (size_t i = 1; i < 4; i++) {
         auto b2  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B2_BIT_OFF + 128*i);
         auto h1  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_H1_OFF     + 128*i);
@@ -1844,6 +1847,7 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
             quicksilver_gfsecpar<QS, 1>(lowmc_const_bit(qs_state, 1))));
     }
 
+    qs_dbg_region = "rain2";
     // Rain gadget 2, block 2: t = Rain(B2)
     {
         const uint8_t* lc[4] = { nullptr, nullptr, nullptr, nullptr };
@@ -1854,6 +1858,7 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
 
     // MAYO:  T*(s) = t, t read from gadget 2's out-block
     // (NIBS_GADGET_2_OUT_OFF), s from VOLERAINHASH_WITNESS_SIZE_BITS onward.
+    qs_dbg_region = "mayo";
     enc_constraints_mayo<QS, P, O>(qs_state, pk, chall2);
     #endif
 }
