@@ -193,7 +193,7 @@ struct OWF_CONSTANTS
     // the RAINHASH build -- OWF_NUM_CONSTRAINTS below is what matters.)
     constexpr static std::size_t OWF_ENC_SBOXES =
         2 * VOLERAINHASH_NUM_ROUNDS +
-        (NIBS_LOWMC_PRF_ROUNDS_C + NIBS_LOWMC_HASH_ROUNDS_C +
+        (NIBS_LOWMC_PRF_ROUNDS_C +
          NIBS_LOWMC_PRF_ROUNDS_C) * NIBS_LOWMC_BOXES_C + VOLEMAYO_M<S>;
     #endif
 
