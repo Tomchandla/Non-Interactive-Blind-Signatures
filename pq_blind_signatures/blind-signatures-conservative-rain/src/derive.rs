@@ -8,7 +8,7 @@ pub const NONCE_BYTES: usize = 16; // signer-sampled nonce
 pub const PKR_BYTES: usize = 32;
 pub const SALT_BYTES: usize = 24;
 pub const MSG_BYTES: usize = 32;
-pub const PRESIG_MSG_BYTES = PKR_BYTES + NONCE_BYTES;
+pub const PRESIG_MSG_BYTES:usize = PKR_BYTES + NONCE_BYTES;
 
 //  Plaintext domain bytes
 pub const DOM_PK: u8 = 0x01;
