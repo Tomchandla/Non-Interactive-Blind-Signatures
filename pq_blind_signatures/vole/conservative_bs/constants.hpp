@@ -94,8 +94,9 @@ template <secpar S, owf O> constexpr std::size_t compute_owf_num_enc_constraints
         constexpr std::size_t seam_constraints = 256 + 128;
         constexpr std::size_t m_public_constraints = 256;
         constexpr std::size_t rainhash_constraints = 2 * (4 * VOLERAINHASH_NUM_ROUNDS + 4); // 64
-        // B1 -> B2 chaining: B2 == h1 + (salt tail | 0xff pad), 4 field elems.
-        constexpr std::size_t chaining_constraints = 4;
+        // B1 -> B2 chaining: lanes 1-3 as field elements (3) + lane 0's
+        // 64 pad bits individually (the salt tail is deliberately unbound).
+        constexpr std::size_t chaining_constraints = 3 + 64;
         return mayo_constraints + lowmc_constraints + seam_constraints +
                m_public_constraints + rainhash_constraints +
                chaining_constraints;                                              
