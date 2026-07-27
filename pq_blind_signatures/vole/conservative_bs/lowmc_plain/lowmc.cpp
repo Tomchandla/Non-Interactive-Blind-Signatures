@@ -371,7 +371,7 @@ void store_block (const block b, uint8_t* bytes) {
 }
 
 
-LowMC* g_inst = nullptr;
+LowMC* g_lowmc = nullptr;
 
 } // namespace
 
