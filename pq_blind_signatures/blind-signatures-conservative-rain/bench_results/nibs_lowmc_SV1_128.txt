@@ -1,12 +1,13 @@
 ================ NIBS LowMC+MAYO [SV1_128] ================
-lowmc setup (one-time, shared): 236.925 ms
-keygen_signer      : 2.510 ms
-keygen_recipient   : 0.047 ms
-issue              : 5.303 ms
-obtain (prove)     : 121.542 ms
-verify             : 127.322 ms
+lowmc setup (one-time, shared): 109.329 ms
+keygen_signer      : 3.046 ms
+keygen_recipient   : 0.077 ms
+issue              : 6.532 ms
+obtain (prove)     : 153.900 ms
+verify             : 151.274 ms
 presignature |Spre| : 0.443 KB
-signature    |sigma|: 25.516 KB
+signature    |sigma|: 24.391 KB
 iterations (mean over): 20
-instances: PRF(256,256,85,13r,d=2^64)  HASH(256,256,85,22r,d=2^256)  Gad2=Rain(512,7r)
+instances: PRF(256,256,85,13r,d=2^64)  Gad2=Rain2(512,7r x2 blocks)
+[22r HASH instance generated for PRG-stream stability; unused by the scheme]
 ==========================================================

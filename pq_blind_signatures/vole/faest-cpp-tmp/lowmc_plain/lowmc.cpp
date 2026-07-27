@@ -371,7 +371,7 @@ void store_block (const block b, uint8_t* bytes) {
 }
 
 
-LowMC* g_inst = nullptr;
+LowMC* g_lowmc = nullptr;
 
 } // namespace
 
@@ -384,50 +384,37 @@ extern "C" {
 
 void nibs_lowmc_init (void)
 {
-    if (g_inst[0]) return;
-    g_inst[NIBS_LOWMC_PRF] =
-        new LowMC(NIBS_LOWMC_BOXES, 256, NIBS_LOWMC_PRF_ROUNDS);
+    if (g_lowmc) return;
+    g_lowmc = new LowMC(NIBS_LOWMC_BOXES, 256, NIBS_LOWMC_PRF_ROUNDS);
 }
 
+unsigned nibs_lowmc_rounds (int inst) { (void)inst; return g_lowmc->rounds; }
 
-unsigned nibs_lowmc_rounds (int inst) { return g_inst[inst]->rounds; }
-
-
-void nibs_lowmc_encrypt (int inst, const uint8_t* key, const uint8_t* pt,
-                         uint8_t* ct)
+void nibs_lowmc_encrypt (int inst, const uint8_t* key, const uint8_t* pt, uint8_t* ct)
 {
-    block c = g_inst[inst]->encrypt(load_block(key), load_block(pt));
+    (void)inst;
+    block c = g_lowmc->encrypt(load_block(key), load_block(pt));
     store_block(c, ct);
 }
 
-
-void nibs_lowmc_witness_states (int inst, const uint8_t* key,
-                                const uint8_t* pt, uint8_t* states,
-                                uint8_t* ct)
+void nibs_lowmc_witness_states (int inst, const uint8_t* key, const uint8_t* pt,
+                                uint8_t* states, uint8_t* ct)
 {
+    (void)inst;
     std::vector<block> post;
-    block c = g_inst[inst]->encrypt(load_block(key), load_block(pt), &post);
-    for (unsigned r = 0; r < g_inst[inst]->rounds; ++r) {
-        store_block(post[r], states + size_t(r) * 32);
-    }
+    block c = g_lowmc->encrypt(load_block(key), load_block(pt), &post);
+    for (unsigned r = 0; r < g_lowmc->rounds; ++r) store_block(post[r], states + size_t(r) * 32);
     if (ct) store_block(c, ct);
 }
 
-
 const uint8_t* nibs_lowmc_linmat (int inst, unsigned r)
-{
-    return &g_inst[inst]->lin_flat[size_t(r) * 256 * 32];
-}
+{ (void)inst; return &g_lowmc->lin_flat[size_t(r) * 256 * 32]; }
 
 const uint8_t* nibs_lowmc_keymat (int inst, unsigned r)
-{
-    return &g_inst[inst]->key_flat[size_t(r) * 256 * 32];
-}
+{ (void)inst; return &g_lowmc->key_flat[size_t(r) * 256 * 32]; }
 
 const uint8_t* nibs_lowmc_roundconst (int inst, unsigned r)
-{
-    return &g_inst[inst]->rc_flat[size_t(r) * 32];
-}
+{ (void)inst; return &g_lowmc->rc_flat[size_t(r) * 32]; }
 
 
 void nibs_lowmc_build_pt (uint8_t dom, const uint8_t* payload16, uint8_t* pt)
