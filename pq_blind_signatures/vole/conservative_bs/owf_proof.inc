@@ -1825,15 +1825,23 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
         enc_constraints_rainhash<QS, P, O>(qs_state, pk, NIBS_GAD2_B1_BIT_OFF, lc, lo);
     }
 
-    // Chaining: B2 == h1 + (salt[16..24] | 0xff-pad). Rain-to-Rain, so the
-    // two sides share the lane representation: 4 field-element equalities.
-    for (size_t i = 0; i < 4; i++) {
-        auto b2 = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B2_BIT_OFF + 128*i);
-        auto h1 = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_H1_OFF   + 128*i);
-        auto p2 = (i == 0)
-            ? qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B2_SALT_OFF)
-            : load_const_128_bits_and_combine(qs_state, RAIN_CAP16);
-        qs_state->add_constraint(b2 + h1 + p2);
+    // Chaining: B2 == h1 XOR ( salt[16..24] | 0xff-pad ).
+    // Lanes 1-3 are pure pad, so they bind as field elements. Lane 0 mixes
+    // the salt tail (prover-chosen, deliberately unbound) with 64 pad bits,
+    // so those 64 bits are bound individually.
+    for (size_t i = 1; i < 4; i++) {
+        auto b2  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B2_BIT_OFF + 128*i);
+        auto h1  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_H1_OFF     + 128*i);
+        auto cap = load_const_128_bits_and_combine(qs_state, RAIN_CAP16);
+        qs_state->add_constraint(b2 + h1 + cap);
+    }
+    for (size_t i = 64; i < 128; i++) {
+        auto b2b = qs_state->get_witness_bit(NIBS_GAD2_B2_BIT_OFF + i);
+        auto h1b = qs_state->get_witness_bit(NIBS_GAD2_H1_OFF     + i);
+        qs_state->add_constraint(quicksilver_gfsecpar<QS, 2>(
+            quicksilver_gfsecpar<QS, 1>(b2b) +
+            quicksilver_gfsecpar<QS, 1>(h1b) +
+            quicksilver_gfsecpar<QS, 1>(lowmc_const_bit(qs_state, 1))));
     }
 
     // Rain gadget 2, block 2: t = Rain(B2)
