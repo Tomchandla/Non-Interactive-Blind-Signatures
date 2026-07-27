@@ -1,8 +1,3 @@
-// test_lowmc_kat.cpp
-//
-// Two test layers:
-//
-
 #include "lowmc.hpp"
 #include <cstdio>
 #include <cstring>
