@@ -39,6 +39,7 @@ constexpr std::size_t NIBS_GADGET_2_IN_OFF   = NIBS_LOWMC_WITNESS_BITS;
 constexpr std::size_t NIBS_GAD2_B1_BIT_OFF   = NIBS_GADGET_2_IN_OFF;
 constexpr std::size_t NIBS_GAD2_B1_PKR_OFF   = NIBS_GAD2_B1_BIT_OFF;
 constexpr std::size_t NIBS_GAD2_B1_NONCE_OFF = NIBS_GAD2_B1_BIT_OFF + 256;
+constexpr std::size_t NIBS_GAD2_B1_SALT_OFF  = NIBS_GAD2_B1_BIT_OFF + 384;
 
 // block 1: in-block + NUM_ROUNDS states, then the chaining value h1
 #define NIBS_GAD2_H1_OFF \
