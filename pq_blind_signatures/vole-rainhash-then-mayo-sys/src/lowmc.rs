@@ -1,6 +1,6 @@
 //  Only the two keyed LowMC gadgets (A: pkR, M: m) live here.
 
-pub const LOWMC_PRF: i32 = 1; // 13 rounds, d = 2^64 
+pub const LOWMC_PRF: i32 = 0; // 13 rounds, d = 2^64 
 
 pub const LOWMC_BLOCK_BYTES: usize = 32;
 pub const LOWMC_KEY_BYTES: usize = 32;
