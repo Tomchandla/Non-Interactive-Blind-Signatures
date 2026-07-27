@@ -622,6 +622,11 @@ public:
             // uint64_t tmp = 0;
             // memcpy(&tmp, &x_max.value().data, sizeof(tmp));
             // std::cout << "should b 0: " << std::hex << std::setw(16) << std::setfill('0') << tmp << "\n";
+            static size_t nibs_idx = 0;
+            if (!(x_max.value() == poly_secpar<S>::set_zero()))
+                fprintf(stderr, "UNSATISFIED constraint #%zu\n", nibs_idx);
+            ++nibs_idx;
+            assert(x_max.value() == poly_secpar<S>::set_zero());
             FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
             for (size_t i = 0; i < max_degree; ++i)
             {
