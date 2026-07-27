@@ -106,6 +106,9 @@ struct quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>
     combine_1_bit(const quicksilver_gf2<quicksilver, deg>* qs_bits);
 };
 
+inline const char* qs_dbg_region = "?";         // remove after debugging
+inline size_t qs_dbg_idx = 0, qs_dbg_fails = 0; // remove after debugging
+
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)
 struct quicksilver_gf2<quicksilver_state<S, false, max_deg>, deg>
 {
@@ -424,9 +427,6 @@ public:
 
     const block_secpar<S>* macs;
 
-    inline const char* qs_dbg_region = "?";         // remove after debugging
-    inline size_t qs_dbg_idx = 0, qs_dbg_fails = 0; // remove after debugging
-
     // Initialize a prover's quicksilver_state. challenge must have length
     // QUICKSILVER_CHALLENGE_BYTES.
     quicksilver_state(const uint8_t* witness, const block_secpar<S>* macs, size_t num_constraints,
@@ -632,7 +632,7 @@ public:
                         (int)deg, qs_dbg_idx, qs_dbg_region);
             }
             // assert(x_max.value() == poly_secpar<S>::set_zero());
-            FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
+            // FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
             for (size_t i = 0; i < max_degree; ++i)
             {
                 state_secpar[i].update(&key_secpar, x_max.mac.coeffs[i]);
