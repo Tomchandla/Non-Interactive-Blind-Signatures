@@ -1873,7 +1873,11 @@ void owf_constraints(quicksilver_state<P::secpar_v, verifier, P::OWF_CONSTS::QS_
     constexpr auto S = P::secpar_v;
     constexpr auto O = P::owf_v;
 
+    qs_dbg_idx = 0;                        
     enc_constraints<QS, P, O>(state, pk, chall2);
+    if constexpr (!verifier)
+        fprintf(stderr, "constraints emitted: %zu (declared: %zu)\n",
+                qs_dbg_idx, (size_t)P::OWF_CONSTS::OWF_NUM_CONSTRAINTS);
 }
 
 
