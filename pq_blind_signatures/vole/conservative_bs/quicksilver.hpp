@@ -631,8 +631,8 @@ public:
                 fprintf(stderr, "UNSAT deg=%d global#%zu region=%s\n",
                         (int)deg, qs_dbg_idx, qs_dbg_region);
             }
-            // assert(x_max.value() == poly_secpar<S>::set_zero());
-            // FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
+            assert(x_max.value() == poly_secpar<S>::set_zero());
+            FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
             for (size_t i = 0; i < max_degree; ++i)
             {
                 state_secpar[i].update(&key_secpar, x_max.mac.coeffs[i]);
