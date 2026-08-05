@@ -11,6 +11,7 @@
 #include <cassert>
 #include <cstring>
 #include <algorithm>
+#include <mutex>
 
 namespace {
 
@@ -232,9 +233,11 @@ extern "C" {
 
 void nibs_lowmc_init(void)
 {
-    if (g_inst) return;
-    g_inst = new LowMCInst(NIBS_LOWMC_BOXES, NIBS_LOWMC_KEY_BITS,
-                           NIBS_LOWMC_ROUNDS);
+    static std::once_flag once;
+    std::call_once(once, [] {
+        g_inst = new LowMCInst(NIBS_LOWMC_BOXES, NIBS_LOWMC_KEY_BITS,
+                               NIBS_LOWMC_ROUNDS);
+    });
 }
 
 unsigned nibs_lowmc_param_level(void) { return NIBS_LOWMC_LEVEL; }
