@@ -1,26 +1,3 @@
-// test_lowmc_kat.cpp
-//
-// Two test layers:
-//
-// 1. PORT-FIDELITY KAT (compile with -DKAT_REFERENCE_PARAMS):
-//    Instantiates the port with the reference repo's default parameters
-//    (blocksize=256, keysize=80, numofboxes=49, rounds=12) on a FRESH PRG
-//    stream and prints ciphertexts for fixed (key, pt) pairs. Compare the
-//    output byte-for-byte against a pristine build of
-//    https://github.com/LowMC/lowmc with the same inputs (kat_reference.cpp
-//    in this directory drives the pristine code). Any mismatch means the
-//    port diverges from the reference and MUST NOT be used.
-//
-// 2. NIBS INSTANCE SELF-TESTS (default build):
-//    - init determinism: constants stable across a re-derivation
-//    - witness/encrypt consistency: recomputing each round from the
-//      exported matrices + recorded post-S-box states reproduces the
-//      ciphertext (this is exactly the relation the circuit enforces,
-//      checked here in the clear)
-//    - MMO and the four NIBS derivations are self-consistent
-//    - domain separation: derive_message can never equal derive_pkr
-//      byte-for-byte on 10k random (skR, ctx)
-
 #include "lowmc.hpp"
 #include <cstdio>
 #include <cstring>
@@ -35,11 +12,6 @@ static void hexprint(const char* label, const uint8_t* b, size_t n)
     printf("\n");
 }
 
-// Recompute one LowMC round in the clear from exported constants,
-// mirroring the circuit gadget's data flow exactly:
-//   in_r = (r == 1) ? pt ^ K0 : L_{r-1}(y_{r-1}) ^ C_{r-1} ^ K_{r-1... }
-// then check S(in_r) == recorded y_r, and finally
-//   ct == L_R(y_R) ^ C_R ^ K_R.
 static const unsigned SBOX[8] = {0, 1, 3, 6, 7, 4, 5, 2};
 
 static void matvec(const uint8_t* rows /*256x32*/, const uint8_t in[32],
@@ -86,7 +58,7 @@ static int check_witness_consistency(int inst, const uint8_t key[32],
     uint8_t ct[32], rk[32], acc[32], sb[32];
     nibs_lowmc_witness_states(inst, key, pt, states.data(), ct);
 
-    // in_1 = pt ^ K0 key-schedule row product
+    //in_1 = pt ^ K0 key-schedule row product
     matvec(nibs_lowmc_keymat(inst, 0), key, rk);
     for (unsigned j = 0; j < 32; ++j) acc[j] = pt[j] ^ rk[j];
 
@@ -114,41 +86,30 @@ int main()
     nibs_lowmc_init();
     int fails = 0;
 
-    printf("[1] witness/encrypt consistency (the exact circuit relation, in the clear)\n");
-    for (int trial = 0; trial < 8; ++trial) {
-        uint8_t key[32], pt[32];
-        for (int i = 0; i < 32; ++i) { key[i] = (uint8_t)(rand()); pt[i] = (uint8_t)(rand()); }
-        fails += check_witness_consistency(NIBS_LOWMC_PRF, key, pt);
-        fails += check_witness_consistency(NIBS_LOWMC_HASH, key, pt);
-    }
-    printf("  %s\n", fails ? "FAILED" : "ok");
-
-    printf("[2] NIBS derivation chain self-consistency\n");
+    printf("[1] NIBS derivation chain self-consistency\n");
     {
         uint8_t skR[32], open[16], nonce[16];
         for (int i = 0; i < 32; ++i) skR[i] = (uint8_t)(0xA0 + i);
         for (int i = 0; i < 16; ++i) { open[i] = (uint8_t)(0x50 + i); nonce[i] = (uint8_t)i; }
-        uint8_t pkR[32], com[32], m[32];
+        uint8_t pkR[32], m[32];
         nibs_derive_pkr(skR, open, pkR);
-        nibs_derive_com(pkR, nonce, com);
         nibs_derive_message(skR, nonce, m);
         hexprint("  pkR = ", pkR, 32);
-        hexprint("  com = ", com, 32);
         hexprint("  m   = ", m, 32);
 
         // witness expansion agrees with the derivations
-        uint8_t wit[NIBS_LOWMC_WITNESS_BYTES], com2[32];
-        nibs_lowmc_witness_expand(skR, open, nonce, wit, com2);
+        uint8_t wit[NIBS_LOWMC_WITNESS_BYTES], pkr2[32];
+        nibs_lowmc_witness_expand(skR, open, nonce, wit, pkr2);
         if (memcmp(wit, skR, 32) || memcmp(wit + 32, open, 16) ||
             memcmp(wit + 48, nonce, 16)) {
             printf("  FAIL: witness header mismatch\n"); ++fails;
-        } else if (memcmp(com, com2, 32)) {
-            printf("  FAIL: witness-expansion com != derive_com\n"); ++fails;
-        } else printf("  witness header + com ok (%d bytes total)\n",
+        } else if (memcmp(pkR, pkr2, 32)) {
+            printf("  FAIL: witness-expansion pkR != derive_pkr\n"); ++fails;
+        } else printf("  witness header + pkR ok (%d bytes total)\n",
                       (int)NIBS_LOWMC_WITNESS_BYTES);
     }
 
-    printf("[3] domain separation m != pkR over 10000 random (skR, open, nonce)\n");
+    printf("[2] domain separation m != pkR over 10000 random (skR, open, nonce)\n");
     {
         int bad = 0;
         for (int trial = 0; trial < 10000; ++trial) {

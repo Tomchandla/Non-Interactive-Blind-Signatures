@@ -1,346 +1,465 @@
 // lowmc.cpp -- see lowmc.hpp for the spec and the list of deviations from
 // the reference implementation at https://github.com/LowMC/lowmc.
-//
-// Porting rules followed here:
-//   * getrandbit / getrandblock / getrandkeyblock, rank_of_Matrix,
-//     instantiate_LowMC, keyschedule, Substitution, MultiplyWithGF2Matrix
-//     and encrypt are LINE-FOR-LINE equivalent to the reference, so that
-//     for identical (blocksize, keysize, numofboxes, rounds) the generated
-//     constants and ciphertexts are bit-identical (verified by
-//     test_lowmc_kat.cpp against a pristine build of the reference).
-//   * The reference's keyblock is bitset<keysize>; here it is bitset<256>
-//     with only the low `keysize` bits ever set, and the rank routine
-//     scans columns from bit keysize-1 downwards, which reproduces the
-//     reference's `size = mat[0].size()` behaviour for any keysize.
 
-#include "lowmc.hpp"
-
-#include <bitset>
 #include <vector>
+#include <bitset>
 #include <cassert>
 #include <cstring>
 #include <algorithm>
 
+#include "lowmc.hpp"
+
 namespace {
 
-constexpr unsigned BLOCKSIZE = 256;
-using block    = std::bitset<BLOCKSIZE>;
-using keyblock = std::bitset<BLOCKSIZE>; // low `keysize` bits used
+constexpr unsigned blocksize = 256;
+using block    = std::bitset<blocksize>;
+using keyblock = std::bitset<blocksize>;
 
-// --- PRG: self-shrinking 80-bit LFSR, process-global (reference-faithful) ---
-std::bitset<80> g_lfsr;      // zero-initialised => "not initialised yet"
 
-bool getrandbit()
-{
-    bool tmp = 0;
-    if (g_lfsr.none()) {
-        g_lfsr.set();
-        for (unsigned i = 0; i < 160; ++i) {
-            tmp = g_lfsr[0] ^ g_lfsr[13] ^ g_lfsr[23] ^ g_lfsr[38] ^
-                  g_lfsr[51] ^ g_lfsr[62];
-            g_lfsr >>= 1;
-            g_lfsr[79] = tmp;
-        }
+//////////////////////////////
+//     The LowMC class      //
+//////////////////////////////
+
+class LowMC {
+public:
+    LowMC (unsigned boxes, unsigned ksize, unsigned nrounds)
+        : numofboxes(boxes), keysize(ksize), rounds(nrounds),
+          identitysize(blocksize - 3*boxes) {
+        instantiate_LowMC();
+        flatten();
     }
-    bool choice = false;
-    do {
-        tmp = g_lfsr[0] ^ g_lfsr[13] ^ g_lfsr[23] ^ g_lfsr[38] ^
-              g_lfsr[51] ^ g_lfsr[62];
-        g_lfsr >>= 1;
-        g_lfsr[79] = tmp;
-        choice = tmp;
-        tmp = g_lfsr[0] ^ g_lfsr[13] ^ g_lfsr[23] ^ g_lfsr[38] ^
-              g_lfsr[51] ^ g_lfsr[62];
-        g_lfsr >>= 1;
-        g_lfsr[79] = tmp;
-    } while (!choice);
-    return tmp;
+
+    block encrypt (const keyblock key, const block message,
+                   std::vector<block>* post_sbox = nullptr) const;
+
+    unsigned numofboxes;
+    unsigned keysize;
+    unsigned rounds;
+    unsigned identitysize;
+
+    std::vector<std::vector<block>>    LinMatrices;    //[rounds][256] rows
+    std::vector<block>                 roundconstants; //[rounds]
+    std::vector<std::vector<keyblock>> KeyMatrices;    //[rounds+1][256] rows
+
+    //Flattened, bit-packed exports (row-major, 32 B/row) for the circuit
+    std::vector<uint8_t> lin_flat;  //rounds * 256 * 32
+    std::vector<uint8_t> key_flat;  //(rounds+1) * 256 * 32
+    std::vector<uint8_t> rc_flat;   //rounds * 32
+
+private:
+    block Substitution (const block message) const;
+
+    block MultiplyWithGF2Matrix
+        (const std::vector<block> matrix, const block message) const;
+    block MultiplyWithGF2Matrix_Key
+        (const std::vector<keyblock> matrix, const keyblock k) const;
+
+    std::vector<block> keyschedule (const keyblock key) const;
+
+    void instantiate_LowMC ();
+    void flatten ();
+
+    unsigned rank_of_Matrix (const std::vector<block> matrix) const;
+    unsigned rank_of_Matrix_Key (const std::vector<keyblock> matrix) const;
+
+    block    getrandblock () const;
+    keyblock getrandkeyblock () const;
+
+    static const unsigned Sbox[8];
+};
+
+const unsigned LowMC::Sbox[8] = {0x00, 0x01, 0x03, 0x06,
+                                 0x07, 0x04, 0x05, 0x02};
+
+
+/////////////////////////////
+//     LowMC functions     //
+/////////////////////////////
+
+// Optionally records every post-S-box state
+block LowMC::encrypt (const keyblock key, const block message,
+                      std::vector<block>* post_sbox) const {
+    auto roundkeys = keyschedule(key);
+    block c = message ^ roundkeys[0];
+    for (unsigned r = 1; r <= rounds; ++r) {
+        c =  Substitution(c);
+        if (post_sbox) post_sbox->push_back(c);
+        c =  MultiplyWithGF2Matrix(LinMatrices[r-1], c);
+        c ^= roundconstants[r-1];
+        c ^= roundkeys[r];
+    }
+    return c;
 }
 
-// Reference rank computation, generalised only in that `size` (the number
-// of columns scanned, from bit size-1 downwards) is a parameter instead of
-// the bitset width. With size == width this is the reference verbatim.
-template <typename BS>
-unsigned rank_of_matrix(const std::vector<BS>& matrix, unsigned size)
-{
-    std::vector<BS> mat(matrix);
+// No need for decrypt in NIBS
+
+
+/////////////////////////////
+// LowMC private functions //
+/////////////////////////////
+
+
+block LowMC::Substitution (const block message) const {
+    block temp = 0;
+    //Get the identity part of the message
+    temp ^= (message >> 3*numofboxes);
+    //Get the rest through the Sboxes
+    for (unsigned i = 1; i <= numofboxes; ++i) {
+        temp <<= 3;
+        temp ^= block(Sbox[ ((message >> 3*(numofboxes-i))
+                            & block(0x7)).to_ulong() ]);
+    }
+    return temp;
+}
+
+// No need for invSubstitution here as decrypt is not used for NIBS
+
+
+block LowMC::MultiplyWithGF2Matrix
+        (const std::vector<block> matrix, const block message) const {
+    block temp = 0;
+    for (unsigned i = 0; i < blocksize; ++i) {
+        temp[i] = (message & matrix[i]).count() % 2;
+    }
+    return temp;
+}
+
+
+block LowMC::MultiplyWithGF2Matrix_Key
+        (const std::vector<keyblock> matrix, const keyblock k) const {
+    block temp = 0;
+    for (unsigned i = 0; i < blocksize; ++i) {
+        temp[i] = (k & matrix[i]).count() % 2;
+    }
+    return temp;
+}
+
+
+// Deviation: returns the round keys instead of setting a member, so one
+// instance can serve many keys concurrently.
+std::vector<block> LowMC::keyschedule (const keyblock key) const {
+    std::vector<block> roundkeys;
+    for (unsigned r = 0; r <= rounds; ++r) {
+        roundkeys.push_back( MultiplyWithGF2Matrix_Key (KeyMatrices[r], key) );
+    }
+    return roundkeys;
+}
+
+
+void LowMC::instantiate_LowMC () {
+    // Create LinMatrices
+    // Remove invLinMatrices as there is no decryption path.
+    LinMatrices.clear();
+    for (unsigned r = 0; r < rounds; ++r) {
+        // Create matrix
+        std::vector<block> mat;
+        // Fill matrix with random bits
+        do {
+            mat.clear();
+            for (unsigned i = 0; i < blocksize; ++i) {
+                mat.push_back( getrandblock () );
+            }
+        // Repeat if matrix is not invertible
+        } while ( rank_of_Matrix(mat) != blocksize );
+        LinMatrices.push_back(mat);
+    }
+
+    // Create roundconstants
+    roundconstants.clear();
+    for (unsigned r = 0; r < rounds; ++r) {
+        roundconstants.push_back( getrandblock () );
+    }
+
+    // Create KeyMatrices
+    KeyMatrices.clear();
+    for (unsigned r = 0; r <= rounds; ++r) {
+        // Create matrix
+        std::vector<keyblock> mat;
+        // Fill matrix with random bits
+        do {
+            mat.clear();
+            for (unsigned i = 0; i < blocksize; ++i) {
+                mat.push_back( getrandkeyblock () );
+            }
+        // Repeat if matrix is not of maximal rank
+        } while ( rank_of_Matrix_Key(mat) < std::min(blocksize, keysize) );
+        KeyMatrices.push_back(mat);
+    }
+
+    return;
+}
+
+
+// No reference analogue: bit-packs the matrices and constants row-major
+// (32 B/row, LSB-first) for the circuit's lowmc_matmul / lowmc_const_block.
+void LowMC::flatten () {
+    auto pack = [](const block& b, uint8_t* out) {
+        std::memset(out, 0, 32);
+        for (unsigned i = 0; i < blocksize; ++i) {
+            if (b[i]) out[i >> 3] |= uint8_t(1u << (i & 7));
+        }
+    };
+
+    lin_flat.assign(size_t(rounds) * 256 * 32, 0);
+    for (unsigned r = 0; r < rounds; ++r) {
+        for (unsigned i = 0; i < 256; ++i) {
+            pack(LinMatrices[r][i], &lin_flat[(size_t(r) * 256 + i) * 32]);
+        }
+    }
+
+    key_flat.assign(size_t(rounds + 1) * 256 * 32, 0);
+    for (unsigned r = 0; r <= rounds; ++r) {
+        for (unsigned i = 0; i < 256; ++i) {
+            pack(KeyMatrices[r][i], &key_flat[(size_t(r) * 256 + i) * 32]);
+        }
+    }
+
+    rc_flat.assign(size_t(rounds) * 32, 0);
+    for (unsigned r = 0; r < rounds; ++r) {
+        pack(roundconstants[r], &rc_flat[size_t(r) * 32]);
+    }
+
+    return;
+}
+
+
+/////////////////////////////
+// Binary matrix functions //
+/////////////////////////////
+
+
+unsigned LowMC::rank_of_Matrix (const std::vector<block> matrix) const {
+    std::vector<block> mat; //Copy of the matrix
+    for (auto u : matrix) {
+        mat.push_back(u);
+    }
+    unsigned size = mat[0].size();
+    //Transform to upper triangular matrix
     unsigned row = 0;
     for (unsigned col = 1; col <= size; ++col) {
-        if (!mat[row][size - col]) {
+        if ( !mat[row][size-col] ) {
             unsigned r = row;
-            while (r < mat.size() && !mat[r][size - col]) ++r;
-            if (r >= mat.size()) continue;
-            std::swap(mat[row], mat[r]);
+            while (r < mat.size() && !mat[r][size-col]) {
+                ++r;
+            }
+            if (r >= mat.size()) {
+                continue;
+            } else {
+                auto temp = mat[row];
+                mat[row] = mat[r];
+                mat[r] = temp;
+            }
         }
-        for (unsigned i = row + 1; i < mat.size(); ++i)
-            if (mat[i][size - col]) mat[i] ^= mat[row];
+        for (unsigned i = row+1; i < mat.size(); ++i) {
+            if ( mat[i][size-col] ) mat[i] ^= mat[row];
+        }
         ++row;
         if (row == size) break;
     }
     return row;
 }
 
-struct LowMCInst {
-    unsigned numofboxes;
-    unsigned keysize;
-    unsigned rounds;
-    unsigned identitysize; // blocksize - 3*numofboxes
 
-    std::vector<std::vector<block>>    LinMatrices;   // [rounds][256] rows
-    std::vector<block>                 roundconstants;// [rounds]
-    std::vector<std::vector<keyblock>> KeyMatrices;   // [rounds+1][256] rows
-
-    // Flattened, bit-packed exports (row-major, 32 B/row) for the circuit.
-    std::vector<uint8_t> lin_flat;   // rounds * 256 * 32
-    std::vector<uint8_t> key_flat;   // (rounds+1) * 256 * 32
-    std::vector<uint8_t> rc_flat;    // rounds * 32
-
-    static const unsigned Sbox[8];
-
-    LowMCInst(unsigned boxes, unsigned ksize, unsigned nrounds)
-        : numofboxes(boxes), keysize(ksize), rounds(nrounds),
-          identitysize(BLOCKSIZE - 3 * boxes)
-    {
-        instantiate();
-        flatten();
+unsigned LowMC::rank_of_Matrix_Key (const std::vector<keyblock> matrix) const {
+    std::vector<keyblock> mat; //Copy of the matrix
+    for (auto u : matrix) {
+        mat.push_back(u);
     }
-
-    block getrandblock() const
-    {
-        block tmp = 0;
-        for (unsigned i = 0; i < BLOCKSIZE; ++i) tmp[i] = getrandbit();
-        return tmp;
-    }
-    keyblock getrandkeyblock() const
-    {
-        keyblock tmp = 0;
-        for (unsigned i = 0; i < keysize; ++i) tmp[i] = getrandbit();
-        return tmp;
-    }
-
-    void instantiate()
-    {
-        // Reference instantiate_LowMC(), minus inverse matrices (which
-        // consume no PRG bits, so constants are unaffected).
-        LinMatrices.clear();
-        for (unsigned r = 0; r < rounds; ++r) {
-            std::vector<block> mat;
-            do {
-                mat.clear();
-                for (unsigned i = 0; i < BLOCKSIZE; ++i)
-                    mat.push_back(getrandblock());
-            } while (rank_of_matrix(mat, BLOCKSIZE) != BLOCKSIZE);
-            LinMatrices.push_back(mat);
+    unsigned size = mat[0].size();
+    //Transform to upper triangular matrix
+    unsigned row = 0;
+    for (unsigned col = 1; col <= size; ++col) {
+        if ( !mat[row][size-col] ) {
+            unsigned r = row;
+            while (r < mat.size() && !mat[r][size-col]) {
+                ++r;
+            }
+            if (r >= mat.size()) {
+                continue;
+            } else {
+                auto temp = mat[row];
+                mat[row] = mat[r];
+                mat[r] = temp;
+            }
         }
-        roundconstants.clear();
-        for (unsigned r = 0; r < rounds; ++r)
-            roundconstants.push_back(getrandblock());
-        KeyMatrices.clear();
-        for (unsigned r = 0; r <= rounds; ++r) {
-            std::vector<keyblock> mat;
-            do {
-                mat.clear();
-                for (unsigned i = 0; i < BLOCKSIZE; ++i)
-                    mat.push_back(getrandkeyblock());
-            } while (rank_of_matrix(mat, keysize) <
-                     std::min(BLOCKSIZE, keysize));
-            KeyMatrices.push_back(mat);
+        for (unsigned i = row+1; i < mat.size(); ++i) {
+            if ( mat[i][size-col] ) mat[i] ^= mat[row];
+        }
+        ++row;
+        if (row == size) break;
+    }
+    return row;
+}
+
+// No need for invert_Matrix as decrypt is not used for NIBS
+
+///////////////////////
+// Pseudorandom bits //
+///////////////////////
+
+
+std::bitset<80> state; //Keeps the 80 bit LSFR state
+
+// Uses the Grain LSFR as self-shrinking generator to create pseudorandom bits
+// Is initialized with the all 1s state
+// The first 160 bits are thrown away
+bool getrandbit () {
+    bool tmp = 0;
+    //If state has not been initialized yet
+    if (state.none ()) {
+        state.set (); //Initialize with all bits set
+        //Throw the first 160 bits away
+        for (unsigned i = 0; i < 160; ++i) {
+            //Update the state
+            tmp =  state[0] ^ state[13] ^ state[23]
+                       ^ state[38] ^ state[51] ^ state[62];
+            state >>= 1;
+            state[79] = tmp;
         }
     }
+    //choice records whether the first bit is 1 or 0.
+    //The second bit is produced if the first bit is 1.
+    bool choice = false;
+    do {
+        //Update the state
+        tmp =  state[0] ^ state[13] ^ state[23]
+                   ^ state[38] ^ state[51] ^ state[62];
+        state >>= 1;
+        state[79] = tmp;
+        choice = tmp;
+        tmp =  state[0] ^ state[13] ^ state[23]
+                   ^ state[38] ^ state[51] ^ state[62];
+        state >>= 1;
+        state[79] = tmp;
+    } while (! choice);
+    return tmp;
+}
 
-    static block mul_matrix(const std::vector<block>& matrix, const block& msg)
-    {
-        block temp = 0;
-        for (unsigned i = 0; i < BLOCKSIZE; ++i)
-            temp[i] = (msg & matrix[i]).count() % 2;
-        return temp;
-    }
 
-    block substitution(const block& message) const
-    {
-        block temp = 0;
-        temp ^= (message >> 3 * numofboxes); // identity part (top bits)
-        for (unsigned i = 1; i <= numofboxes; ++i) {
-            temp <<= 3;
-            temp ^= block(Sbox[((message >> 3 * (numofboxes - i)) &
-                                block(0x7)).to_ulong()]);
-        }
-        return temp;
-    }
+block LowMC::getrandblock () const {
+    block tmp = 0;
+    for (unsigned i = 0; i < blocksize; ++i) tmp[i] = getrandbit ();
+    return tmp;
+}
 
-    std::vector<block> roundkeys_for(const keyblock& key) const
-    {
-        std::vector<block> rk;
-        for (unsigned r = 0; r <= rounds; ++r)
-            rk.push_back(mul_matrix(KeyMatrices[r], key));
-        return rk;
-    }
+keyblock LowMC::getrandkeyblock () const {
+    keyblock tmp = 0;
+    for (unsigned i = 0; i < keysize; ++i) tmp[i] = getrandbit ();
+    return tmp;
+}
 
-    // encrypt, optionally recording every post-S-box state.
-    block encrypt(const keyblock& key, const block& message,
-                  std::vector<block>* post_sbox = nullptr) const
-    {
-        auto rk = roundkeys_for(key);
-        block c = message ^ rk[0];
-        for (unsigned r = 1; r <= rounds; ++r) {
-            c = substitution(c);
-            if (post_sbox) post_sbox->push_back(c);
-            c = mul_matrix(LinMatrices[r - 1], c);
-            c ^= roundconstants[r - 1];
-            c ^= rk[r];
-        }
-        return c;
-    }
 
-    void flatten()
-    {
-        auto pack = [](const block& b, uint8_t* out) {
-            std::memset(out, 0, 32);
-            for (unsigned i = 0; i < BLOCKSIZE; ++i)
-                if (b[i]) out[i >> 3] |= uint8_t(1u << (i & 7));
-        };
-        lin_flat.assign(size_t(rounds) * 256 * 32, 0);
-        for (unsigned r = 0; r < rounds; ++r)
-            for (unsigned i = 0; i < 256; ++i)
-                pack(LinMatrices[r][i], &lin_flat[(size_t(r) * 256 + i) * 32]);
-        key_flat.assign(size_t(rounds + 1) * 256 * 32, 0);
-        for (unsigned r = 0; r <= rounds; ++r)
-            for (unsigned i = 0; i < 256; ++i)
-                pack(KeyMatrices[r][i], &key_flat[(size_t(r) * 256 + i) * 32]);
-        rc_flat.assign(size_t(rounds) * 32, 0);
-        for (unsigned r = 0; r < rounds; ++r)
-            pack(roundconstants[r], &rc_flat[size_t(r) * 32]);
-    }
-};
+/////////////////////////////
+//   Block <-> byte I/O    //
+/////////////////////////////
 
-const unsigned LowMCInst::Sbox[8] = {0x00, 0x01, 0x03, 0x06,
-                                     0x07, 0x04, 0x05, 0x02};
 
-LowMCInst* g_inst[2] = {nullptr, nullptr};
-
-block load_block(const uint8_t* bytes)
-{
+block load_block (const uint8_t* bytes) {
     block b = 0;
-    for (unsigned i = 0; i < BLOCKSIZE; ++i)
+    for (unsigned i = 0; i < blocksize; ++i) {
         if ((bytes[i >> 3] >> (i & 7)) & 1) b[i] = 1;
+    }
     return b;
 }
 
-void store_block(const block& b, uint8_t* bytes)
-{
+
+void store_block (const block b, uint8_t* bytes) {
     std::memset(bytes, 0, 32);
-    for (unsigned i = 0; i < BLOCKSIZE; ++i)
+    for (unsigned i = 0; i < blocksize; ++i) {
         if (b[i]) bytes[i >> 3] |= uint8_t(1u << (i & 7));
+    }
 }
+
+
+LowMC* g_lowmc = nullptr;
 
 } // namespace
 
+
+/////////////////////////////
+//    C interface (FFI)    //
+/////////////////////////////
+
 extern "C" {
 
-void nibs_lowmc_init(void)
+void nibs_lowmc_init (void)
 {
-    if (g_inst[0]) return;
-    // ORDER IS PART OF THE SPEC (shared PRG stream): HASH first, PRF second.
-    g_inst[NIBS_LOWMC_HASH] =
-        new LowMCInst(NIBS_LOWMC_BOXES, 256, NIBS_LOWMC_HASH_ROUNDS);
-    g_inst[NIBS_LOWMC_PRF] =
-        new LowMCInst(NIBS_LOWMC_BOXES, 256, NIBS_LOWMC_PRF_ROUNDS);
+    if (g_lowmc) return;
+    g_lowmc = new LowMC(NIBS_LOWMC_BOXES, 256, NIBS_LOWMC_PRF_ROUNDS);
 }
 
-unsigned nibs_lowmc_rounds(int inst) { return g_inst[inst]->rounds; }
+unsigned nibs_lowmc_rounds (int inst) { (void)inst; return g_lowmc->rounds; }
 
-void nibs_lowmc_encrypt(int inst, const uint8_t* key, const uint8_t* pt,
-                        uint8_t* ct)
+void nibs_lowmc_encrypt (int inst, const uint8_t* key, const uint8_t* pt, uint8_t* ct)
 {
-    block c = g_inst[inst]->encrypt(load_block(key), load_block(pt));
+    (void)inst;
+    block c = g_lowmc->encrypt(load_block(key), load_block(pt));
     store_block(c, ct);
 }
 
-void nibs_lowmc_mmo(const uint8_t* chain, const uint8_t* msg, uint8_t* out)
+void nibs_lowmc_witness_states (int inst, const uint8_t* key, const uint8_t* pt,
+                                uint8_t* states, uint8_t* ct)
 {
-    uint8_t ct[32];
-    nibs_lowmc_encrypt(NIBS_LOWMC_HASH, chain, msg, ct);
-    for (unsigned i = 0; i < 32; ++i) out[i] = ct[i] ^ msg[i];
-}
-
-void nibs_lowmc_witness_states(int inst, const uint8_t* key,
-                               const uint8_t* pt, uint8_t* states,
-                               uint8_t* ct)
-{
+    (void)inst;
     std::vector<block> post;
-    block c = g_inst[inst]->encrypt(load_block(key), load_block(pt), &post);
-    for (unsigned r = 0; r < g_inst[inst]->rounds; ++r)
-        store_block(post[r], states + size_t(r) * 32);
+    block c = g_lowmc->encrypt(load_block(key), load_block(pt), &post);
+    for (unsigned r = 0; r < g_lowmc->rounds; ++r) store_block(post[r], states + size_t(r) * 32);
     if (ct) store_block(c, ct);
 }
 
-const uint8_t* nibs_lowmc_linmat(int inst, unsigned r)
-{
-    return &g_inst[inst]->lin_flat[size_t(r) * 256 * 32];
-}
-const uint8_t* nibs_lowmc_keymat(int inst, unsigned r)
-{
-    return &g_inst[inst]->key_flat[size_t(r) * 256 * 32];
-}
-const uint8_t* nibs_lowmc_roundconst(int inst, unsigned r)
-{
-    return &g_inst[inst]->rc_flat[size_t(r) * 32];
-}
+const uint8_t* nibs_lowmc_linmat (int inst, unsigned r)
+{ (void)inst; return &g_lowmc->lin_flat[size_t(r) * 256 * 32]; }
 
-void nibs_lowmc_build_pt(uint8_t dom, const uint8_t* payload16, uint8_t* pt)
+const uint8_t* nibs_lowmc_keymat (int inst, unsigned r)
+{ (void)inst; return &g_lowmc->key_flat[size_t(r) * 256 * 32]; }
+
+const uint8_t* nibs_lowmc_roundconst (int inst, unsigned r)
+{ (void)inst; return &g_lowmc->rc_flat[size_t(r) * 32]; }
+
+
+void nibs_lowmc_build_pt (uint8_t dom, const uint8_t* payload16, uint8_t* pt)
 {
     std::memset(pt, 0, NIBS_LOWMC_BLOCK_BYTES);
     pt[0] = dom;
     if (payload16) std::memcpy(pt + 1, payload16, 16);
 }
 
-void nibs_derive_pkr(const uint8_t* skR, const uint8_t* open, uint8_t* pkR)
+
+// GadA: pkR = Com(skR; open) = E^PRF_skR( PT(DOM_PK, open) )
+void nibs_derive_pkr (const uint8_t* skR, const uint8_t* open, uint8_t* pkR)
 {
     uint8_t pt[32];
     nibs_lowmc_build_pt(NIBS_DOM_PK, open, pt);
     nibs_lowmc_encrypt(NIBS_LOWMC_PRF, skR, pt, pkR);
 }
 
-void nibs_derive_com(const uint8_t* pkR, const uint8_t* nonce, uint8_t* com)
-{
-    uint8_t pt[32];
-    nibs_lowmc_build_pt(NIBS_DOM_COM, nonce, pt);
-    nibs_lowmc_mmo(pkR, pt, com);
-}
 
-void nibs_derive_message(const uint8_t* skR, const uint8_t* nonce, uint8_t* m)
+// GadM: m = E^PRF_skR( PT(DOM_M, nonce) )
+void nibs_derive_message (const uint8_t* skR, const uint8_t* nonce, uint8_t* m)
 {
     uint8_t pt[32];
     nibs_lowmc_build_pt(NIBS_DOM_M, nonce, pt);
     nibs_lowmc_encrypt(NIBS_LOWMC_PRF, skR, pt, m);
 }
 
-// Fills the LowMC region only (1600 B): skR | open | nonce | GadA states |
-// Gad1 states | GadM states. The Rain gadget-2 region and the MAYO preimage
-// are appended by the caller (get_witness_nibs / MAYO packing). com_out
-// receives com = MMO(pkR, PT(DOM_COM, nonce)) so the caller can build the
-// Rain in-block (com | salt | cap).
-void nibs_lowmc_witness_expand(const uint8_t* skR, const uint8_t* open,
-                               const uint8_t* nonce, uint8_t* out,
-                               uint8_t* com_out)
+
+// Fills the LowMC region only (896 B): skR | open | nonce | GadA states |
+// GadM states.
+void nibs_lowmc_witness_expand (const uint8_t* skR, const uint8_t* open,
+                                const uint8_t* nonce, uint8_t* out,
+                                uint8_t* pkr_out)
 {
     uint8_t* p = out;
     std::memcpy(p, skR, 32);   p += 32;
     std::memcpy(p, open, 16);  p += 16;
     std::memcpy(p, nonce, 16); p += 16;
 
-    uint8_t pt[32], pkR[32], e1[32];
+    uint8_t pt[32];
 
     // GadA: pkR = E^PRF_skR(PT(DOM_PK, open))
     nibs_lowmc_build_pt(NIBS_DOM_PK, open, pt);
-    nibs_lowmc_witness_states(NIBS_LOWMC_PRF, skR, pt, p, pkR);
+    nibs_lowmc_witness_states(NIBS_LOWMC_PRF, skR, pt, p, pkr_out);
     p += NIBS_LOWMC_PRF_ROUNDS * 32;
-
-    // Gad1: com = E^HASH_pkR(PT(DOM_COM, nonce)) ^ PT (MMO)
-    nibs_lowmc_build_pt(NIBS_DOM_COM, nonce, pt);
-    nibs_lowmc_witness_states(NIBS_LOWMC_HASH, pkR, pt, p, e1);
-    for (unsigned i = 0; i < 32; ++i) com_out[i] = e1[i] ^ pt[i];
-    p += NIBS_LOWMC_HASH_ROUNDS * 32;
 
     // GadM: m = E^PRF_skR(PT(DOM_M, nonce))
     nibs_lowmc_build_pt(NIBS_DOM_M, nonce, pt);
@@ -349,21 +468,16 @@ void nibs_lowmc_witness_expand(const uint8_t* skR, const uint8_t* open,
 
 } // extern "C"
 
-// ---------------------------------------------------------------------------
-// Port-fidelity KAT hook (test builds only): fresh instance at the reference
-// repo's default parameters (keysize=80, boxes=49, rounds=12) on the current
-// PRG stream. Call ONLY from a fresh process, before nibs_lowmc_init(), so
-// the stream state matches a fresh run of the pristine reference.
-// ---------------------------------------------------------------------------
 #ifdef LOWMC_PORT_TEST
-extern "C" void nibs_lowmc_port_kat(const uint8_t key10[10],
-                                    const uint8_t pt32[32], uint8_t ct32[32])
+extern "C" void nibs_lowmc_port_kat (const uint8_t key10[10],
+                                     const uint8_t pt32[32], uint8_t ct32[32])
 {
-    static LowMCInst* ref = nullptr;
-    if (!ref) ref = new LowMCInst(49, 80, 12);
+    static LowMC* ref = nullptr;
+    if (!ref) ref = new LowMC(49, 80, 12);
     keyblock k = 0;
-    for (unsigned i = 0; i < 80; ++i)
+    for (unsigned i = 0; i < 80; ++i) {
         if ((key10[i >> 3] >> (i & 7)) & 1) k[i] = 1;
+    }
     store_block(ref->encrypt(k, load_block(pt32)), ct32);
 }
 #endif

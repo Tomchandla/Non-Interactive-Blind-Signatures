@@ -1,23 +1,15 @@
-//! Integration tests for the mixed LowMC+MAYO(+Rain-for-t) NIBS scheme.
-//!
-//! Compiles as an EXTERNAL crate against the public API. Run with:
-//!
-//!     cargo test --test nibs_rain -- --nocapture
-//!
-//! Covers: derivation consistency (incl. the commitment opening), the
-//! issue/MAYO half in isolation, a full round-trip per parameter set, the
-//! public-m binding, and the reusability/unlinkability hooks (distinct
-//! nonces / distinct recipients / distinct openings give distinct values).
+// To run, just use the command below.
+// RUST_MIN_STACK=8388608 cargo test --test nibs_rain -- --nocapture
 
 use blind_signatures_conservative_rain::blind_sig_conservative_rain::{
-    NibsLowmc, M_BYTES, PKR_BYTES,
+    presig_message, NibsLowmc, M_BYTES, PKR_BYTES,
 };
 use blind_signatures_conservative_rain::derive::{
-    derive_com, derive_message, derive_pkr,
+    derive_message, derive_pkr, PRESIG_MSG_BYTES,
 };
 use blind_signatures_conservative_rain::zk::ZKType;
 
-/// Every parameter set the scheme claims to support.
+// Can include more later on
 const PARAM_SETS: &[(&str, ZKType)] = &[
     ("FV1_128", ZKType::FV1_128),
     ("FV2_128", ZKType::FV2_128),
@@ -25,8 +17,6 @@ const PARAM_SETS: &[(&str, ZKType)] = &[
     ("SV2_128", ZKType::SV2_128),
 ];
 
-/// Build a fresh instance + both key pairs. Factored out so each test starts
-/// from an identical, honestly-generated state.
 fn fresh(
     zk: ZKType,
 ) -> (
@@ -42,13 +32,9 @@ fn fresh(
     (bs, pk, sk, pk_r, sk_r)
 }
 
-/// The derived values (pkR, com, m) must have the fixed byte lengths the
-/// circuit assumes, and derive_pkr(K, s) must reproduce the pk_r from
-/// keygen_recipient. A mismatch here is the first thing that breaks the
-/// (skR, nonce) -> m binding.
 #[test]
 fn witness_derivation_is_consistent() {
-    let (bs, _pk, _sk, pk_r, sk_r) = fresh(ZKType::SV1_128);
+    let (_bs, _pk, _sk, pk_r, sk_r) = fresh(ZKType::SV1_128);
 
     let derived_pk_r = derive_pkr(&sk_r.key, &sk_r.opening);
     assert_eq!(
@@ -58,35 +44,52 @@ fn witness_derivation_is_consistent() {
     assert_eq!(derived_pk_r.len(), PKR_BYTES, "pkR must be {PKR_BYTES} bytes");
 
     let nonce = vec![0x07u8; 16];
-    let com = derive_com(&derived_pk_r, &nonce);
+    let msg = presig_message(&derived_pk_r, &nonce);
     assert_eq!(
-        com.len(),
-        bs.mayo.mayo_params.m_digest_bytes,
-        "com must be exactly the MAYO digest length"
+        msg.len(),
+        PRESIG_MSG_BYTES,
+        "presignature message must be exactly pkR || nonce = {PRESIG_MSG_BYTES} bytes"
     );
 
     let m = derive_message(&sk_r.key, &nonce);
     assert_eq!(m.len(), M_BYTES, "derived message m must be {M_BYTES} bytes");
 }
 
-/// The issued presignature must MAYO-verify against
-/// com = MMO(pkR, PT(DOM_COM, nonce)) for the nonce Issue sampled. This
-/// isolates the signer/issue half from the proving half.
 #[test]
 fn issued_presignature_verifies_as_mayo_signature() {
     let (bs, pk, sk, pk_r, _sk_r) = fresh(ZKType::SV1_128);
 
     let (presig, nonce) = bs.issue(&sk, &pk_r);
-    let com = derive_com(&pk_r, &nonce);
+    let msg = presig_message(&pk_r, &nonce);
 
     assert!(
-        bs.mayo.verify_fixed_length_rain(&pk, &com, &presig),
-        "the presignature the signer issued must verify against com"
+        bs.mayo.verify_fixed_length_rain(&pk, &msg, &presig),
+        "the presignature the signer issued must verify against pkR || nonce"
     );
 }
 
-/// The headline property: a full honest run of the protocol produces a
-/// signature that publicly verifies, across every parameter set.
+#[test]
+fn presignature_rejects_tampered_message() {
+    let (bs, pk, sk, pk_r, _sk_r) = fresh(ZKType::SV1_128);
+    let (presig, nonce) = bs.issue(&sk, &pk_r);
+
+    let mut wrong_pk_r = pk_r.clone();
+    wrong_pk_r[0] ^= 0x01;
+    assert!(
+        !bs.mayo
+            .verify_fixed_length_rain(&pk, &presig_message(&wrong_pk_r, &nonce), &presig),
+        "presignature must not verify against a different pkR"
+    );
+
+    let mut wrong_nonce = nonce.clone();
+    wrong_nonce[0] ^= 0x01;
+    assert!(
+        !bs.mayo
+            .verify_fixed_length_rain(&pk, &presig_message(&pk_r, &wrong_nonce), &presig),
+        "presignature must not verify against a different nonce"
+    );
+}
+
 #[test]
 fn full_round_trip_verifies_all_param_sets() {
     for (name, zk) in PARAM_SETS {
@@ -105,9 +108,6 @@ fn full_round_trip_verifies_all_param_sets() {
     }
 }
 
-/// Verification must be bound to the message: verifying a valid signature
-/// against a DIFFERENT m has to fail. If this passes with a tampered m, the
-/// public-output constraint on gadget GadM is not actually binding.
 #[test]
 fn verification_rejects_wrong_message() {
     let (bs, pk, sk, pk_r, sk_r) = fresh(ZKType::SV1_128);
@@ -125,12 +125,9 @@ fn verification_rejects_wrong_message() {
         !bs.verify(&mut epk, &wrong_m, &mut sig, &mut additional_r),
         "verification must reject a signature checked against the wrong message"
     );
-    // and the untampered one still passes (guards against a verify that always fails)
     assert!(bs.verify(&mut epk, &m, &mut sig, &mut additional_r));
 }
 
-/// Reusability hook (BCGY24 Def. 5.2): two independent issuances for the SAME
-/// recipient must yield distinct messages (the nonces differ w.o.p.).
 #[test]
 fn distinct_issuances_give_distinct_messages() {
     let (bs, pk, sk, pk_r, sk_r) = fresh(ZKType::SV1_128);
@@ -147,8 +144,6 @@ fn distinct_issuances_give_distinct_messages() {
     assert_ne!(m_a, m_b, "different nonces must derive different messages");
 }
 
-/// Distinct recipients must derive distinct messages for the SAME nonce
-/// (pseudorandomness under independent keys).
 #[test]
 fn distinct_recipients_give_distinct_messages() {
     let (bs, _pk, _sk, _pk_r1, sk_r1) = fresh(ZKType::SV1_128);
@@ -161,8 +156,6 @@ fn distinct_recipients_give_distinct_messages() {
     assert_ne!(m1, m2, "different recipients must derive different messages");
 }
 
-/// Commitment shape: same key, different openings -> different pkR
-/// (the hiding hook for the Com(K; s) fidelity change).
 #[test]
 fn distinct_openings_give_distinct_pkr() {
     let (bs, _pk, _sk, _pk_r, sk_r) = fresh(ZKType::SV1_128);

@@ -106,6 +106,9 @@ struct quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>
     combine_1_bit(const quicksilver_gf2<quicksilver, deg>* qs_bits);
 };
 
+inline const char* qs_dbg_region = "?";         // remove after debugging
+inline size_t qs_dbg_idx = 0, qs_dbg_fails = 0; // remove after debugging
+
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)
 struct quicksilver_gf2<quicksilver_state<S, false, max_deg>, deg>
 {
@@ -622,6 +625,13 @@ public:
             // uint64_t tmp = 0;
             // memcpy(&tmp, &x_max.value().data, sizeof(tmp));
             // std::cout << "should b 0: " << std::hex << std::setw(16) << std::setfill('0') << tmp << "\n";
+            ++qs_dbg_idx;
+            if (!(x_max.value() == poly_secpar<S>::set_zero())) {
+                ++qs_dbg_fails;
+                fprintf(stderr, "UNSAT deg=%d global#%zu region=%s\n",
+                        (int)deg, qs_dbg_idx, qs_dbg_region);
+            }
+            assert(x_max.value() == poly_secpar<S>::set_zero());
             FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
             for (size_t i = 0; i < max_degree; ++i)
             {

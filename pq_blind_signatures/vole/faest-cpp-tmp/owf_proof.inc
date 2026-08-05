@@ -1301,9 +1301,6 @@ enc_constraints_fwd_last_round_and_check(QS* qs_state,
     //     }   
     // }
 
-    // Output consistency: witness out-block must equal the recomputed hash,
-    // for ALL gadgets including M (lane 0 of M binds the first 128 bits of m
-    // to the hash of TAG_M | skR | ctx -- skipping it breaks soundness).
     qs_state->add_constraint(hash_output_from_witness[0] + hash_out[0]);
     qs_state->add_constraint(hash_output_from_witness[1] + hash_out[1]);
     qs_state->add_constraint(hash_output_from_witness[2] + hash_out[2]);
@@ -1816,34 +1813,52 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
     #endif
 
     #if defined WITH_RAINHASH
-    // MIXED circuit (see parameters_lowmc.hpp for the layout):
-    //
-    //   LowMC section -- GadA (pkR from skR + open), Gad1 (com from pkR +
-    //   nonce, MMO), GadM (m from skR + nonce, constrained to the public
-    //   pk->msg), plus the 256 seam equalities binding Rain gadget 2's
-    //   witnessed com lanes to Gad1's output expression:
+    qs_dbg_region = "lowmc";
     nibs_lowmc_constraints<QS, P>(qs_state, pk);
 
-    // Rain gadget 2 -- MAYO's message hash, unchanged from the Rain edition:
-    //   t = Rain( com | salt | cap ),  [in | 7 states | out] geometry at
-    //   NIBS_GADGET_2_IN_OFF. Lanes 0-1 load the witnessed com bits (bound
-    //   to the LowMC com by the seam above); lanes 2-3 load the witnessed
-    //   salt-and-cap tail: MAYO's salt is 24 bytes at L1, so it fills lane 2
-    //   and the first 8 bytes of lane 3 (the remaining 8 bytes are the 0xff
-    //   fill both the signer's sign_fixed_length_rain and get_witness_nibs
-    //   put there). Lane 3 MUST be witness-loaded, not the constant cap --
-    //   a constant lane would truncate the salt to 16 bytes in-circuit.
+    qs_dbg_region = "rain1";
+    // Rain gadget 2, block 1: h1 = Rain(pkR | nonce | salt[0..16])
     {
         const uint8_t* lc[4] = { nullptr, nullptr, nullptr, nullptr };
-        const size_t   lo[4] = { NIBS_GAD2_COM_BIT_OFF,
-                                 NIBS_GAD2_COM_BIT_OFF + 128,
-                                 NIBS_GAD2_SALT_BIT_OFF,
-                                 NIBS_GAD2_SALT_BIT_OFF + 128 };
-        enc_constraints_rainhash<QS, P, O>(qs_state, pk, NIBS_GADGET_2_IN_OFF, lc, lo);
+        const size_t   lo[4] = { NIBS_GAD2_B1_BIT_OFF,          // pkR lo
+                                 NIBS_GAD2_B1_BIT_OFF + 128,    // pkR hi
+                                 NIBS_GAD2_B1_NONCE_OFF,        // nonce
+                                 NIBS_GAD2_B1_SALT_OFF };       // salt[0..16]
+        enc_constraints_rainhash<QS, P, O>(qs_state, pk, NIBS_GAD2_B1_BIT_OFF, lc, lo);
+    }
+
+    // Chaining: B2 == h1 XOR ( salt[16..24] | 0xff-pad ).
+    // Lanes 1-3 are pure pad, so they bind as field elements. Lane 0 mixes
+    // the salt tail (prover-chosen, deliberately unbound) with 64 pad bits,
+    // so those 64 bits are bound individually.
+    qs_dbg_region = "chain";
+    for (size_t i = 1; i < 4; i++) {
+        auto b2  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B2_BIT_OFF + 128*i);
+        auto h1  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_H1_OFF     + 128*i);
+        auto cap = load_const_128_bits_and_combine(qs_state, RAIN_CAP16);
+        qs_state->add_constraint(b2 + h1 + cap);
+    }
+    for (size_t i = 64; i < 128; i++) {
+        auto b2b = qs_state->get_witness_bit(NIBS_GAD2_B2_BIT_OFF + i);
+        auto h1b = qs_state->get_witness_bit(NIBS_GAD2_H1_OFF     + i);
+        qs_state->add_constraint(quicksilver_gfsecpar<QS, 2>(
+            quicksilver_gfsecpar<QS, 1>(b2b) +
+            quicksilver_gfsecpar<QS, 1>(h1b) +
+            quicksilver_gfsecpar<QS, 1>(lowmc_const_bit(qs_state, 1))));
+    }
+
+    qs_dbg_region = "rain2";
+    // Rain gadget 2, block 2: t = Rain(B2)
+    {
+        const uint8_t* lc[4] = { nullptr, nullptr, nullptr, nullptr };
+        const size_t   lo[4] = { NIBS_GAD2_B2_BIT_OFF,       NIBS_GAD2_B2_BIT_OFF + 128,
+                                 NIBS_GAD2_B2_BIT_OFF + 256, NIBS_GAD2_B2_BIT_OFF + 384 };
+        enc_constraints_rainhash<QS, P, O>(qs_state, pk, NIBS_GAD2_B2_BIT_OFF, lc, lo);
     }
 
     // MAYO:  T*(s) = t, t read from gadget 2's out-block
     // (NIBS_GADGET_2_OUT_OFF), s from VOLERAINHASH_WITNESS_SIZE_BITS onward.
+    qs_dbg_region = "mayo";
     enc_constraints_mayo<QS, P, O>(qs_state, pk, chall2);
     #endif
 }
@@ -1858,7 +1873,11 @@ void owf_constraints(quicksilver_state<P::secpar_v, verifier, P::OWF_CONSTS::QS_
     constexpr auto S = P::secpar_v;
     constexpr auto O = P::owf_v;
 
+    qs_dbg_idx = 0;                        
     enc_constraints<QS, P, O>(state, pk, chall2);
+    if constexpr (!verifier)
+        fprintf(stderr, "constraints emitted: %zu (declared: %zu)\n",
+                qs_dbg_idx, (size_t)P::OWF_CONSTS::OWF_NUM_CONSTRAINTS);
 }
 
 

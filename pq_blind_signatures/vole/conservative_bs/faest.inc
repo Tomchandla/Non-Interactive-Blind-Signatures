@@ -157,27 +157,27 @@ void get_witness_nibs(uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* 
     #endif
 
     #if defined WITH_RAINHASH
-        // MIXED witness expansion (layout: parameters_lowmc.hpp).
-        //
-        // LowMC region [0, NIBS_LOWMC_WITNESS_BITS): skR | open | nonce |
-        // GadA states | Gad1 states | GadM states. com comes back out so the
-        // Rain gadget-2 in-block can be built.
-        uint8_t com[32];
+        uint8_t pkr[32];
         nibs_lowmc_init();
-        nibs_lowmc_witness_expand(skr_ptr, open, nonce,
-                                  witness, com);
+        nibs_lowmc_witness_expand(skr_ptr, open, nonce, witness, pkr);
 
-        // Rain gadget 2 region: in-block = com(32) | salt(16) | 0xff cap(16),
-        // then 7 post-S-box state blocks, then the out-block (t in the first
-        // 32 bytes). Same geometry and the same plain-side expander as the
-        // Rain edition; the 0xff cap matches sign_fixed_length_rain's input
-        // padding on the signer side and the constant cap lane in the circuit.
-        uint8_t* in2 = witness + NIBS_GADGET_2_IN_OFF / 8;
-        memset(in2, 0xff, VOLERAINHASH_B_BYTES);
-        memcpy(in2, com, 32);
-        memcpy(in2 + 32, salt, VOLEMAYO_SALT_BYTES<P::secpar_v>);
-        rain_hash_with_sbox_output(in2,
-                                   witness + NIBS_GADGET_2_IN_OFF / 8 + VOLERAINHASH_B_BYTES,
+        // Rain block B1 = pkR(32) | nonce(16) | salt[0..16]
+        uint8_t* b1 = witness + NIBS_GAD2_B1_BIT_OFF / 8;
+        memcpy(b1,      pkr,   32);
+        memcpy(b1 + 32, nonce, 16);
+        memcpy(b1 + 48, salt,  16);
+        rain_hash_with_sbox_output(b1,
+                                   b1 + VOLERAINHASH_B_BYTES,
+                                   witness + NIBS_GAD2_H1_OFF / 8);
+
+        // Rain block B2 = ( salt[16..] | 0xff-pad ) XOR h1
+        const uint8_t* h1 = witness + NIBS_GAD2_H1_OFF / 8;
+        uint8_t* b2 = witness + NIBS_GAD2_B2_BIT_OFF / 8;
+        memset(b2, 0xff, VOLERAINHASH_B_BYTES);
+        memcpy(b2, salt + 16, VOLEMAYO_SALT_BYTES<P::secpar_v> - 16);
+        for (size_t i = 0; i < VOLERAINHASH_B_BYTES; i++) b2[i] ^= h1[i];
+        rain_hash_with_sbox_output(b2,
+                                   b2 + VOLERAINHASH_B_BYTES,
                                    witness + NIBS_GADGET_2_OUT_OFF / 8);
     #endif
     

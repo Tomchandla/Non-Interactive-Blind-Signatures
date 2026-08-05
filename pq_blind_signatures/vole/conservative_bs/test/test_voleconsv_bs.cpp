@@ -188,14 +188,18 @@ TEST_CASE("volerainhash_then_mayo vole_prove v2_128_s", "[volerainhash_then_mayo
 
     uint8_t* s = sk_packed + VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v> + VOLERAINHASH_PUBLIC_SIZE_BYTES + VOLERAINHASH_WITNESS_SIZE_BYTES<S>;
     // MIXED layout (parameters_lowmc.hpp): the witness region starts with
-    // skR(32) | open(16) | nonce(16); the MAYO salt lives inside the Rain
-    // gadget-2 in-block, right after the 32 com bytes.
-    uint8_t* wit = sk_packed + VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v> + VOLERAINHASH_PUBLIC_SIZE_BYTES;
+    // skR(32) | open(16) | nonce(16). The MAYO salt is NO LONGER contiguous
+    // inside the witness -- it straddles Rain blocks B1 and B2 (16 B close
+    // B1, 8 B open B2) -- so it must be supplied as its own buffer, which
+    // get_witness_nibs then splits across the two blocks.
+    uint8_t* wit     = sk_packed + VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v> + VOLERAINHASH_PUBLIC_SIZE_BYTES;
     uint8_t* spk_skr = wit;
     uint8_t* open_r  = wit + NIBS_SKR_BYTES;
     uint8_t* nonce   = wit + NIBS_SKR_BYTES + NIBS_OPEN_BYTES;
-    uint8_t* salt    = wit + NIBS_GADGET_2_IN_OFF / 8 + 32;
 
+    std::array<uint8_t, VOLEMAYO_SALT_BYTES<S>> salt_buf;
+    memset(salt_buf.data(), 0x5a, VOLEMAYO_SALT_BYTES<S>);
+    uint8_t* salt = salt_buf.data();
     uint8_t random_seed = 0;
 
     std::vector<uint8_t> r_additional(32);

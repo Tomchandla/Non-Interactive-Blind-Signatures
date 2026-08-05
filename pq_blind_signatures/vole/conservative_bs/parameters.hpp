@@ -156,11 +156,6 @@ template <secpar S>
 constexpr std::size_t VOLEMAYO_E_SIZE_BYTES = (VOLEMAYO_M<S> * VOLEMAYO_M<S>) / VOLEMAYO_FIELD_IN_UINT8;
 template <secpar S>
 #if defined WITH_RAINHASH
-// NIBS: the public m = Rain(TAG_M | skR | ctx) is a full 32-byte digest
-// (NIBS_M_BYTES, defined below). pk.msg, VOLEMAYO_PUBLIC_SIZE_BYTES, and all
-// pack/unpack paths size themselves from this constant, so it MUST match
-// NIBS_M_BYTES*8 -- otherwise serialize_pk writes 32B into a 16B slot and
-// enc_constraint_m_public's lane 1 compares against garbage struct memory.
 constexpr std::size_t HASHED_MSG_SIZE_BITS = 256;
 #else
 constexpr std::size_t HASHED_MSG_SIZE_BITS = secpar_to_bits(S);
@@ -267,24 +262,15 @@ constexpr std::size_t VOLERAINHASH_CAPACITY = VOLERAINHASH_B - VOLERAINHASH_RATE
 constexpr std::size_t VOLERAINHASH_PK_OUTPUT_BYTES = 0; // output of rainhash is still private for the mayo part
 constexpr std::size_t VOLERAINHASH_PUBLIC_SIZE_BYTES = VOLERAINHASH_PK_OUTPUT_BYTES + VOLERAINHASH_RC_SIZE_BYTES + VOLERAINHASH_MAT_SIZE_BYTES;  // pk output
 
-// ---- NIBS constants: MIXED LowMC + Rain circuit ----------------------------
-// The Rain-only NIBS block (TAG_PK/TAG_M, gadget A/1/M Rain offsets,
-// NIBS_SKR/CTX_BIT_OFF) is gone: gadgets A, 1 and M are LowMC now, only
-// gadget 2 (MAYO's message hash t = Rain(com | salt | cap)) stays Rain.
-// The full mixed witness layout lives in parameters_lowmc.hpp; it consumes
-// VOLERAINHASH_B / VOLERAINHASH_NUM_ROUNDS / RAIN_CAP16 defined above.
+// NIBS constants: MIXED LowMC + Rain circuit
 constexpr uint8_t RAIN_CAP16[16]  = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
                                      0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
 
 #include "parameters_lowmc.hpp"
 
-// Kept name, new meaning: the size of the whole non-MAYO witness region
-// (LowMC gadgets A/1/M + Rain gadget 2). Everything downstream -- witness
-// arrays in faest.inc, serialize_sk, OWF_CONSTANTS::WITNESS_BITS, and the
-// MAYO s load offset in enc_constraints_mayo -- sizes itself from this.
 template <secpar S>
 constexpr std::size_t VOLERAINHASH_WITNESS_SIZE_BITS = NIBS_MIXED_WITNESS_BITS;
-// = 12800 (LowMC) + 9*512 (Rain Gad2) = 17408 bits = 2176 bytes
+// = 7168 (LowMC) + 18*512 (Rain Gad2) = 16384 bits = 2048 bytes
 
 template <secpar S>  
 constexpr std::size_t VOLERAINHASH_WITNESS_SIZE_BYTES = (VOLERAINHASH_WITNESS_SIZE_BITS<S> + 7)/8;

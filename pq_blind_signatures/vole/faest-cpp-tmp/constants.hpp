@@ -89,24 +89,17 @@ template <secpar S, owf O> constexpr std::size_t compute_owf_num_enc_constraints
 
     #if defined WITH_RAINHASH
         constexpr std::size_t mayo_constraints = 1;
-        // MIXED NIBS circuit (parameters_lowmc.hpp / owf_proof_lowmc.inc):
-        //
-        // LowMC gadgets -- per round: 85 S-boxes x 3 constraints + 1 identity
-        // bit = 256 constraints. GadA (PRF, 13r) + Gad1 (HASH, 22r) +
-        // GadM (PRF, 13r) = 48 rounds.
         constexpr std::size_t lowmc_constraints =
-            (NIBS_LOWMC_PRF_ROUNDS_C + NIBS_LOWMC_HASH_ROUNDS_C +
-             NIBS_LOWMC_PRF_ROUNDS_C) * NIBS_LOWMC_N;                 // 12288
-        // seam: witnessed Gad2 com lanes == Gad1 output expression (bitwise)
-        constexpr std::size_t seam_constraints = 256;
-        // public-m equality, bitwise against pk->msg (in nibs_lowmc_constraints)
+            (NIBS_LOWMC_PRF_ROUNDS_C + NIBS_LOWMC_PRF_ROUNDS_C) * NIBS_LOWMC_N;   
+        constexpr std::size_t seam_constraints = 256 + 128;
         constexpr std::size_t m_public_constraints = 256;
-        // ONE Rain gadget (Gad2 = MAYO's message hash):
-        //   4*NUM_ROUNDS sbox-inverse constraints (check_rain_hash_constraints)
-        // + 4 output-consistency constraints (enc_constraints_fwd_last_round_and_check)
-        constexpr std::size_t rainhash_constraints = 1 * (4 * VOLERAINHASH_NUM_ROUNDS + 4);
+        constexpr std::size_t rainhash_constraints = 2 * (4 * VOLERAINHASH_NUM_ROUNDS + 4); // 64
+        // B1 -> B2 chaining: lanes 1-3 as field elements (3) + lane 0's
+        // 64 pad bits individually (the salt tail is deliberately unbound).
+        constexpr std::size_t chaining_constraints = 3 + 64;
         return mayo_constraints + lowmc_constraints + seam_constraints +
-               m_public_constraints + rainhash_constraints;           // 12833
+               m_public_constraints + rainhash_constraints +
+               chaining_constraints;                                              
     #endif
     
 }
@@ -201,7 +194,7 @@ struct OWF_CONSTANTS
     // the RAINHASH build -- OWF_NUM_CONSTRAINTS below is what matters.)
     constexpr static std::size_t OWF_ENC_SBOXES =
         2 * VOLERAINHASH_NUM_ROUNDS +
-        (NIBS_LOWMC_PRF_ROUNDS_C + NIBS_LOWMC_HASH_ROUNDS_C +
+        (NIBS_LOWMC_PRF_ROUNDS_C +
          NIBS_LOWMC_PRF_ROUNDS_C) * NIBS_LOWMC_BOXES_C + VOLEMAYO_M<S>;
     #endif
 

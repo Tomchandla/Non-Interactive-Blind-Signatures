@@ -1,31 +1,5 @@
-//! Criterion benchmarks for the LowMC+MAYO NIBS scheme.
-//!
-//! Methodology is deliberately IDENTICAL to the RainHash bench
-//! (blind_sig_conservative_rain.rs): same five ops, same ITERS, same
-//! param sets, same batching -- so the two result sets are directly
-//! comparable columns. Results go to bench_results/nibs_lowmc_<name>.txt,
-//! NOT overwriting the Rain-era nibs_<name>.txt files.
-//!
-//! One genuinely new line item vs Rain: `lowmc_setup()` instantiates the
-//! two LowMC instances (35 rounds' worth of 256x256 invertible matrices
-//! from the reference LFSR, with rejection sampling) -- a one-time,
-//! multi-second cost with no Rain analogue (Rain's constants were
-//! compile-time headers). It is timed ONCE at startup and reported as a
-//! Setup cost (the `pp`-generation bucket in the BGY25 interface); it must
-//! never run inside a timed closure, which is why it is called before any
-//! fixture is built.
-//!
-//! Run:
-//!     cargo bench --bench blind_sig_conservative_rain
-//! (bench target name kept from the Rain edition; see Cargo.toml)
-//!
-//! Criterion writes HTML reports to target/criterion/. The one-shot summary
-//! block (means in ms, sizes in KB) is printed once per parameter set.
-//!
-//! Cargo.toml declares:
-//!     [[bench]]
-//!     name = "blind_sig_conservative_rain"
-//!     harness = false
+// Run:
+//     RUST_MIN_STACK=8388608 cargo bench --bench blind_sig_conservative_rain
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::fs;
@@ -38,8 +12,6 @@ use blind_signatures_conservative_rain::blind_sig_conservative_rain::NibsLowmc;
 use blind_signatures_conservative_rain::derive::lowmc_setup;
 use blind_signatures_conservative_rain::zk::ZKType;
 
-/// Parameter sets to benchmark. All four level-1 variants (fast/slow x v1/v2)
-/// over the same LowMC+MAYO circuit. Each writes its own summary file.
 const PARAM_SETS: &[(&str, ZKType)] = &[
     ("FV1_128", ZKType::FV1_128),
     ("FV2_128", ZKType::FV2_128),
@@ -47,8 +19,6 @@ const PARAM_SETS: &[(&str, ZKType)] = &[
     ("SV2_128", ZKType::SV2_128),
 ];
 
-/// Everything an operation might need, generated once per parameter set so the
-/// benchmarked closures don't pay setup/keygen cost inside the timing loop.
 struct Fixture {
     bs: NibsLowmc,
     pk: Vec<u8>,
@@ -60,8 +30,6 @@ struct Fixture {
 }
 
 fn build_fixture(zk: ZKType) -> Fixture {
-    // lowmc_setup() has already run (timed, in bench_all) and is idempotent,
-    // so nothing here can trigger a lazy multi-second instantiation.
     let bs = NibsLowmc::setup(zk);
     let (pk, sk) = bs.keygen_signer();
     let (pk_r, sk_r) = bs.keygen_recipient(); // skR is 32 bytes now
@@ -77,14 +45,8 @@ fn build_fixture(zk: ZKType) -> Fixture {
     }
 }
 
-/// A quick, non-criterion summary: mean per-op time and the two byte sizes.
-/// Cheap to read at a glance and easy to paste next to Table 2.
-/// `setup_ms` is the one-time LowMC instantiation cost, reported per file so
-/// each summary is self-contained.
 fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
     const ITERS: u32 = 20;
-
-    // warm-up + correctness (also confirms the pipeline is sound before timing)
     for _ in 0..5 {
         let (presig, nonce) = f.bs.issue(&f.sk, &f.pk_r);
         let (m, mut sig) = f
@@ -111,8 +73,8 @@ fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
         t_kr += start.elapsed().as_secs_f64() * 1_000.0;
 
         let start = Instant::now();
-        // issue = nonce sampling + derive_com (22-round LowMC-MMO)
-        //         + Rain target hash + MAYO preimage sampling
+        // issue = nonce sampling + two-block Rain target hash on
+        //         pkR || nonce || salt + MAYO preimage sampling
         let (presig, nonce) = f.bs.issue(&sk, &f.pk_r);
         t_issue += start.elapsed().as_secs_f64() * 1_000.0;
 
@@ -120,10 +82,8 @@ fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
         let mut epk = f.bs.mayo.expand_pk(&pk);
 
         let start = Instant::now();
-        // obtain = witness expansion (48 LowMC rounds of bit-matrix products
-        // + one 7-round Rain gadget, in the clear) + the VOLEitH prove. The
-        // prove dominates; the LowMC circuit's dense linear layers are the
-        // interesting delta vs the all-Rain edition.
+        // obtain = witness expansion (26 LowMC rounds of bit-matrix products
+        // + two 7-round Rain blocks, in the clear) + the VOLEitH prove.
         let (m, mut sig) = f
             .bs
             .obtain(&pk, &mut epk, &f.sk_r, &presig, &nonce, &mut f.additional_r);
@@ -133,15 +93,12 @@ fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
         assert!(f.bs.verify(&mut epk, &m, &mut sig, &mut f.additional_r));
         t_verify += start.elapsed().as_secs_f64() * 1_000.0;
 
-        presig_len = presig.len(); // now includes the 16-byte salt
+        presig_len = presig.len(); // includes MAYO1's 24-byte salt
         sig_len = sig.proof.len();
     }
 
     let n = ITERS as f64;
 
-    // Build the summary once, then send it to BOTH stdout and a per-parameter
-    // file: bench_results/nibs_lowmc_<name>.txt. Distinct from the Rain-era
-    // nibs_<name>.txt so both columns survive for the comparison section.
     let summary = format!(
         "================ NIBS LowMC+MAYO [{name}] ================\n\
          lowmc setup (one-time, shared): {:.3} ms\n\
@@ -153,7 +110,8 @@ fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
          presignature |Spre| : {:.3} KB\n\
          signature    |sigma|: {:.3} KB\n\
          iterations (mean over): {}\n\
-         instances: PRF(256,256,85,13r,d=2^64)  HASH(256,256,85,22r,d=2^256)  Gad2=Rain(512,7r)\n\
+         instances: PRF(256,256,85,13r,d=2^64)  Gad2=Rain2(512,7r x2 blocks)\n\
+         [22r HASH instance generated for PRG-stream stability; unused by the scheme]\n\
          ==========================================================\n",
         setup_ms,
         t_ks / n,
@@ -165,11 +123,9 @@ fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
         sig_len as f64 / 1024.0,
         ITERS,
     );
-
-    // stdout (visible during the run)
+    
     println!("\n{summary}");
 
-    // per-parameter file
     let mut path = PathBuf::from("bench_results");
     if let Err(e) = fs::create_dir_all(&path) {
         eprintln!("[{name}] could not create bench_results/: {e}");
@@ -183,8 +139,6 @@ fn print_summary(name: &str, f: &mut Fixture, setup_ms: f64) {
 }
 
 fn bench_all(c: &mut Criterion) {
-    // One-time LowMC instantiation: timed here, reported in every summary,
-    // and NEVER inside a timed closure. Idempotent thereafter.
     let start = Instant::now();
     lowmc_setup();
     let setup_ms = start.elapsed().as_secs_f64() * 1_000.0;
@@ -192,32 +146,24 @@ fn bench_all(c: &mut Criterion) {
 
     for (name, zk) in PARAM_SETS {
         let mut f = build_fixture(*zk);
-
-        // one-shot human-readable summary (means + sizes)
+        
         print_summary(name, &mut f, setup_ms);
 
         let mut group = c.benchmark_group(format!("nibs_lowmc/{name}"));
 
-        // keygen_signer (MAYO keygen -- unchanged from Rain version)
         group.bench_function("keygen_signer", |b| {
             b.iter(|| black_box(f.bs.keygen_signer()))
         });
 
-        // keygen_recipient: skR <-$ {0,1}^256, pkR = E^PRF_skR(PT_PK)
         group.bench_function("keygen_recipient", |b| {
             b.iter(|| black_box(f.bs.keygen_recipient()))
         });
 
-        // issue: signer samples the nonce, derives com (LowMC-MMO) and
-        // MAYO-signs it (the non-interactive step: needs only pkR)
         group.bench_function("issue", |b| {
             b.iter(|| black_box(f.bs.issue(&f.sk, &f.pk_r)))
         });
 
-        // obtain: the recipient's proving step (the expensive one -- VOLEitH)
         group.bench_function("obtain", |b| {
-            // each iteration needs a fresh presignature + a fresh epk buffer,
-            // generated OUTSIDE the timed closure via iter_batched.
             b.iter_batched(
                 || {
                     let (presig, nonce) = f.bs.issue(&f.sk, &f.pk_r);
@@ -234,7 +180,6 @@ fn bench_all(c: &mut Criterion) {
             )
         });
 
-        // verify: public verification of the blind signature
         group.bench_function("verify", |b| {
             b.iter_batched(
                 || {
