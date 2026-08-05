@@ -81,10 +81,7 @@ enum {
         NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BLOCK_BYTES,
 };
 
-// ---------------------------------------------------------------------------
-// Consistency checks
-// ---------------------------------------------------------------------------
-
+// Size checks
 #ifdef __cplusplus
 static_assert(3 * NIBS_LOWMC_BOXES + NIBS_LOWMC_IDENTITY_BITS ==
                   NIBS_LOWMC_BLOCK_BITS,
