@@ -1,17 +1,8 @@
-// lowmc.cpp -- see lowmc.hpp for the spec and the list of deviations from
-// the reference implementation at https://github.com/LowMC/lowmc.
+// Portions of this file are derived from the LowMC reference implementation:
+// https://github.com/LowMC/lowmc
 //
-// Porting rules followed here:
-//   * getrandbit / getrandblock / getrandkeyblock, rank_of_Matrix,
-//     instantiate_LowMC, keyschedule, Substitution, MultiplyWithGF2Matrix
-//     and encrypt are LINE-FOR-LINE equivalent to the reference, so that
-//     for identical (blocksize, keysize, numofboxes, rounds) the generated
-//     constants and ciphertexts are bit-identical (verified by
-//     test_lowmc_kat.cpp against a pristine build of the reference).
-//   * The reference's keyblock is bitset<keysize>; here it is bitset<256>
-//     with only the low `keysize` bits ever set, and the rank routine
-//     scans columns from bit keysize-1 downwards, which reproduces the
-//     reference's `size = mat[0].size()` behaviour for any keysize.
+// Original work licensed under the MIT License.
+// Modifications for this project are Copyright (c) 2026 Thomas Chandler.
 
 #include "lowmc.hpp"
 
