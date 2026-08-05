@@ -1,3 +1,9 @@
+// Portions of this file are derived from the LowMC reference implementation:
+// https://github.com/LowMC/lowmc
+//
+// Original work licensed under the MIT License.
+// Adapted for the NIBS construction.
+
 #ifndef NIBS_LOWMC_H
 #define NIBS_LOWMC_H
 
@@ -9,7 +15,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 void nibs_lowmc_init(void);
 
@@ -36,7 +41,6 @@ const uint8_t* nibs_lowmc_roundconst(unsigned r);
 void nibs_derive_message(const uint8_t K[NIBS_LOWMC_KEY_BYTES],
                          const uint8_t r[NIBS_LOWMC_NONCE_BYTES],
                          uint8_t m[NIBS_LOWMC_MESSAGE_BYTES]);
-
 
 void nibs_lowmc_witness_expand(const uint8_t K[NIBS_LOWMC_KEY_BYTES],
                                const uint8_t r[NIBS_LOWMC_NONCE_BYTES],
