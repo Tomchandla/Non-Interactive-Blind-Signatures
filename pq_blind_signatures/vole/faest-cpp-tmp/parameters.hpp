@@ -8,6 +8,10 @@
 #include <utility>
 #include <array>
 
+#if defined WITH_RAINHASH
+#include "lowmc_plain/lowmc_params.hpp"
+#endif
+
 #define DEBUG_MODE 1
 
 namespace faest
@@ -27,12 +31,12 @@ constexpr std::size_t secpar_to_bits(secpar s) { return std::to_underlying(s); }
 constexpr std::size_t secpar_to_bytes(secpar s) { return secpar_to_bits(s) / 8; }
 
 
-// ############# MAYO PARAMTERS ##############
-// General params
+// Mayo params
 constexpr std::size_t VOLEMAYO_BIN_FIELD_SIZE = 4;
 constexpr std::size_t VOLEMAYO_FIELD_IN_UINT8 = 8/VOLEMAYO_BIN_FIELD_SIZE;
-constexpr std::size_t VOLEMAYO_MOD = (1 << VOLEMAYO_BIN_FIELD_SIZE) | 2 | 1; // modulus=x^4 + x + 1 00010011
-// Sec Lvl specific params
+constexpr std::size_t VOLEMAYO_MOD = (1 << VOLEMAYO_BIN_FIELD_SIZE) | 2 | 1;
+
+// Sec Lvl specific params (1/3/5)
 constexpr std::size_t VOLEMAYO_N_L1 = 86;
 constexpr std::size_t VOLEMAYO_M_L1 = 78;
 constexpr std::size_t VOLEMAYO_O_L1 = 8;
@@ -40,24 +44,23 @@ constexpr std::size_t VOLEMAYO_K_L1 = 10;
 constexpr std::size_t VOLEMAYO_Q_L1 = 16;
 constexpr std::size_t VOLEMAYO_SALT_BYTES_L1 = 24;
 constexpr std::size_t VOLEMAYO_DIGEST_BYTES_L1 = 32;
-constexpr std::size_t VOLEMAYO_PK_SEED_BYTES_L1 = 16;       // seed expands to the full pk
-constexpr std::size_t VOLEMAYO_R_BITS_L1 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_M_L1;    // witness r bits
-constexpr std::size_t VOLEMAYO_S_BITS_L1 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_K_L1 * VOLEMAYO_N_L1;  // witness s bits
-constexpr std::size_t VOLEMAYO_WITNESS_SIZE_BITS_L1 = VOLEMAYO_S_BITS_L1;        // r + s bits
+constexpr std::size_t VOLEMAYO_PK_SEED_BYTES_L1 = 16;
+constexpr std::size_t VOLEMAYO_R_BITS_L1 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_M_L1;
+constexpr std::size_t VOLEMAYO_S_BITS_L1 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_K_L1 * VOLEMAYO_N_L1;
+constexpr std::size_t VOLEMAYO_WITNESS_SIZE_BITS_L1 = VOLEMAYO_S_BITS_L1;
 constexpr std::size_t VOLEMAYO_COMMIT_MU_SIZE_BYTES_L1 = 16;
 
-constexpr std::size_t VOLEMAYO_N_L3 = 118;       // NOTE: In the spec, it is 99!, we set to 100 such that witness b is divisible by 8
-                                                // TODO: check for security implications!, most likely there is none : )
+constexpr std::size_t VOLEMAYO_N_L3 = 118;
 constexpr std::size_t VOLEMAYO_M_L3 = 108;
 constexpr std::size_t VOLEMAYO_O_L3 = 10;
 constexpr std::size_t VOLEMAYO_K_L3 = 11;
 constexpr std::size_t VOLEMAYO_Q_L3 = 16;
 constexpr std::size_t VOLEMAYO_SALT_BYTES_L3 = 32;
 constexpr std::size_t VOLEMAYO_DIGEST_BYTES_L3 = 48;
-constexpr std::size_t VOLEMAYO_PK_SEED_BYTES_L3 = 16;       // seed expands to the full pk
-constexpr std::size_t VOLEMAYO_R_BITS_L3 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_M_L3;    // witness r bits
-constexpr std::size_t VOLEMAYO_S_BITS_L3 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_K_L3 * VOLEMAYO_N_L3;  // witness s bits
-constexpr std::size_t VOLEMAYO_WITNESS_SIZE_BITS_L3 = VOLEMAYO_S_BITS_L3;        // r + s bits
+constexpr std::size_t VOLEMAYO_PK_SEED_BYTES_L3 = 16;
+constexpr std::size_t VOLEMAYO_R_BITS_L3 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_M_L3;
+constexpr std::size_t VOLEMAYO_S_BITS_L3 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_K_L3 * VOLEMAYO_N_L3;
+constexpr std::size_t VOLEMAYO_WITNESS_SIZE_BITS_L3 = VOLEMAYO_S_BITS_L3;
 constexpr std::size_t VOLEMAYO_COMMIT_MU_SIZE_BYTES_L3 = 24;
 
 constexpr std::size_t VOLEMAYO_N_L5 = 154;
@@ -67,10 +70,10 @@ constexpr std::size_t VOLEMAYO_K_L5 = 12;
 constexpr std::size_t VOLEMAYO_Q_L5 = 16;
 constexpr std::size_t VOLEMAYO_SALT_BYTES_L5 = 40;
 constexpr std::size_t VOLEMAYO_DIGEST_BYTES_L5 = 64;
-constexpr std::size_t VOLEMAYO_PK_SEED_BYTES_L5 = 16;       // seed expands to the full pk
-constexpr std::size_t VOLEMAYO_R_BITS_L5 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_M_L5;    // witness r bits
-constexpr std::size_t VOLEMAYO_S_BITS_L5 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_K_L5 * VOLEMAYO_N_L5;  // witness s bits
-constexpr std::size_t VOLEMAYO_WITNESS_SIZE_BITS_L5 = VOLEMAYO_S_BITS_L5;        // r + s bits
+constexpr std::size_t VOLEMAYO_PK_SEED_BYTES_L5 = 16;
+constexpr std::size_t VOLEMAYO_R_BITS_L5 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_M_L5;
+constexpr std::size_t VOLEMAYO_S_BITS_L5 = VOLEMAYO_BIN_FIELD_SIZE * VOLEMAYO_K_L5 * VOLEMAYO_N_L5;
+constexpr std::size_t VOLEMAYO_WITNESS_SIZE_BITS_L5 = VOLEMAYO_S_BITS_L5;
 constexpr std::size_t VOLEMAYO_COMMIT_MU_SIZE_BYTES_L5 = 32;
 constexpr std::array<uint8_t, 4> VOLEMAYO_F_TAIL_64 = {8, 0, 2, 8};
 constexpr std::array<uint8_t, 4> VOLEMAYO_F_TAIL_78 = {8, 1, 1, 0};
@@ -158,7 +161,8 @@ template <secpar S>
 constexpr std::size_t VOLEMAYO_E_SIZE_BYTES = (VOLEMAYO_M<S> * VOLEMAYO_M<S>) / VOLEMAYO_FIELD_IN_UINT8;
 template <secpar S>
 #if defined WITH_RAINHASH
-constexpr std::size_t HASHED_MSG_SIZE_BITS = 256;
+// the public message m = LowMC_K(r) is one LowMC block = lambda bits
+constexpr std::size_t HASHED_MSG_SIZE_BITS = secpar_to_bits(S);
 #else
 constexpr std::size_t HASHED_MSG_SIZE_BITS = secpar_to_bits(S);
 #endif
@@ -247,7 +251,6 @@ constexpr std::size_t VOLEKECCAK_MAYO_HASH_INPUT_BYTES =  VOLEMAYO_DIGEST_BYTES<
 #endif
 
 #if defined WITH_RAINHASH
-// ############# RAIN PARAMTERS ##############
 constexpr std::size_t VOLERAINHASH_ONE_ROUND_RC_SIZE_BYTES = 64;
 constexpr std::size_t VOLERAINHASH_RC_SIZE_BITS = 64*7 * 8;
 constexpr std::size_t VOLERAINHASH_MAT_SIZE_BITS = 64*512*7 * 8;
@@ -260,8 +263,8 @@ constexpr std::size_t VOLERAINHASH_B_BYTES = (VOLERAINHASH_B + 7)/8;
 constexpr std::size_t VOLERAINHASH_NUM_ROUNDS = 7;
 constexpr std::size_t VOLERAINHASH_RATE = 512;
 constexpr std::size_t VOLERAINHASH_RATE_BYTES = (VOLERAINHASH_RATE+7)/8;
-constexpr std::size_t VOLERAINHASH_CAPACITY = VOLERAINHASH_B - VOLERAINHASH_RATE; // 256 bits
-constexpr std::size_t VOLERAINHASH_PK_OUTPUT_BYTES = 0; // output of rainhash is still private for the mayo part
+constexpr std::size_t VOLERAINHASH_CAPACITY = VOLERAINHASH_B - VOLERAINHASH_RATE;
+constexpr std::size_t VOLERAINHASH_PK_OUTPUT_BYTES = 0;
 constexpr std::size_t VOLERAINHASH_PUBLIC_SIZE_BYTES = VOLERAINHASH_PK_OUTPUT_BYTES + VOLERAINHASH_RC_SIZE_BYTES + VOLERAINHASH_MAT_SIZE_BYTES;  // pk output
 
 // NIBS constants: MIXED LowMC + Rain circuit
@@ -272,7 +275,6 @@ constexpr uint8_t RAIN_CAP16[16]  = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
 
 template <secpar S>
 constexpr std::size_t VOLERAINHASH_WITNESS_SIZE_BITS = NIBS_MIXED_WITNESS_BITS;
-// = 7168 (LowMC) + 18*512 (Rain Gad2) = 16384 bits = 2048 bytes
 
 template <secpar S>  
 constexpr std::size_t VOLERAINHASH_WITNESS_SIZE_BYTES = (VOLERAINHASH_WITNESS_SIZE_BITS<S> + 7)/8;

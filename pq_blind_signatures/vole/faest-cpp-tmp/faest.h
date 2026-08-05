@@ -361,6 +361,9 @@ extern "C"
                                                size_t *s_size);
 
     // v2 128
+    // pkR = c = trunc_256( RainHash( op | K | 0xff-fill ) )
+    void nibs_rain_pkr(const uint8_t* op, const uint8_t* k, uint8_t* pkr);
+
     bool rainhash_then_mayo128sv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
                 uint8_t* expanded_pk, uint8_t* msg_hash,
                 uint8_t* rain_rc_qs, uint8_t* rain_mat_qs,

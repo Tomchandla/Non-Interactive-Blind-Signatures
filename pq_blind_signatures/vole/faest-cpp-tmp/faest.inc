@@ -157,15 +157,27 @@ void get_witness_nibs(uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* 
     #endif
 
     #if defined WITH_RAINHASH
-        uint8_t pkr[32];
+        // Parameter names kept from the FFI: skr_ptr carries K, nonce carries r.
         nibs_lowmc_init();
-        nibs_lowmc_witness_expand(skr_ptr, open, nonce, witness, pkr);
 
-        // Rain block B1 = pkR(32) | nonce(16) | salt[0..16]
+        // LowMC region: K | r | GadM post-S-box states (m discarded here; the
+        // caller publishes it separately).
+        nibs_lowmc_witness_expand(skr_ptr, nonce, witness, nullptr);
+
+        // GadA region: inA = op | K | 0xff-fill; out-block = c = pkR.
+        uint8_t* ga = witness + NIBS_GADA_IN_OFF / 8;
+        memset(ga, 0xff, VOLERAINHASH_B_BYTES);
+        memcpy(ga, open, NIBS_OP_BYTES);
+        memcpy(ga + NIBS_OP_BYTES, skr_ptr, NIBS_K_BYTES);
+        rain_hash_with_sbox_output(ga,
+                                   ga + VOLERAINHASH_B_BYTES,
+                                   witness + NIBS_GADA_OUT_OFF / 8);
+
+        // Rain block B1 = c(32) | r(16) | salt[0..16]
         uint8_t* b1 = witness + NIBS_GAD2_B1_BIT_OFF / 8;
-        memcpy(b1,      pkr,   32);
-        memcpy(b1 + 32, nonce, 16);
-        memcpy(b1 + 48, salt,  16);
+        memcpy(b1, witness + NIBS_GADA_OUT_OFF / 8, NIBS_PKR_BYTES);
+        memcpy(b1 + NIBS_PKR_BYTES, nonce, NIBS_R_BYTES);
+        memcpy(b1 + NIBS_PKR_BYTES + NIBS_R_BYTES, salt, 16);
         rain_hash_with_sbox_output(b1,
                                    b1 + VOLERAINHASH_B_BYTES,
                                    witness + NIBS_GAD2_H1_OFF / 8);

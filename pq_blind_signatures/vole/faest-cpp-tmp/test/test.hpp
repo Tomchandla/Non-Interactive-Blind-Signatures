@@ -492,42 +492,51 @@ template <typename P> inline void test_gen_keypair(unsigned char* pk, unsigned c
     #if defined WITH_RAINHASH
         set_pk<P>(pk);
 
-        // MIXED LowMC+Rain witness expansion, mirroring get_witness_nibs:
-        // LowMC region (skR | open | nonce | GadA/Gad1/GadM states), then the
-        // Rain gadget-2 region [com | salt | cap | 7 states | out].
         std::array<uint8_t, VOLERAINHASH_WITNESS_SIZE_BYTES<P::secpar_v>> witness;
         memset(witness.data(), 0x00, VOLERAINHASH_WITNESS_SIZE_BYTES<P::secpar_v>);
 
         // random recipient key material + nonce (the witness inputs)
-        uint8_t sk_r  [NIBS_SKR_BYTES];   memset_rand(sk_r,   NIBS_SKR_BYTES);
-        uint8_t open_r[NIBS_OPEN_BYTES];  memset_rand(open_r, NIBS_OPEN_BYTES);
-        uint8_t nonce [NIBS_NONCE_BYTES]; memset_rand(nonce,  NIBS_NONCE_BYTES);
+        uint8_t K     [NIBS_K_BYTES];     memset_rand(K,      NIBS_K_BYTES);
+        uint8_t open_r[NIBS_OP_BYTES];    memset_rand(open_r, NIBS_OP_BYTES);
+        uint8_t nonce [NIBS_R_BYTES];     memset_rand(nonce,  NIBS_R_BYTES);
         uint8_t salt [VOLEMAYO_SALT_BYTES<P::secpar_v>];
         memset_rand(salt, VOLEMAYO_SALT_BYTES<P::secpar_v>);
 
-        // LowMC region + com for the seam
-        uint8_t com[32];
+        // LowMC init
+        uint8_t m_pub[NIBS_M_BYTES];
         nibs_lowmc_init();
-        nibs_lowmc_witness_expand(sk_r, open_r, nonce, witness.data(), com);
+        nibs_lowmc_witness_expand(K, nonce, witness.data(), m_pub);
 
-        // Rain gadget 2: t = Rain(com | salt | cap)
-        uint8_t* in2 = witness.data() + NIBS_GADGET_2_IN_OFF / 8;
-        memset(in2, 0xff, VOLERAINHASH_B_BYTES);
-        memcpy(in2, com, 32);
-        memcpy(in2 + 32, salt, VOLEMAYO_SALT_BYTES<P::secpar_v>);
-        rain_hash_with_sbox_output(in2,
-                                   witness.data() + NIBS_GADGET_2_IN_OFF / 8 + VOLERAINHASH_B_BYTES,
+        // GadA
+        uint8_t* ga = witness.data() + NIBS_GADA_IN_OFF / 8;
+        memset(ga, 0xff, VOLERAINHASH_B_BYTES);
+        memcpy(ga, open_r, NIBS_OP_BYTES);
+        memcpy(ga + NIBS_OP_BYTES, K, NIBS_K_BYTES);
+        rain_hash_with_sbox_output(ga, ga + VOLERAINHASH_B_BYTES,
+                                   witness.data() + NIBS_GADA_OUT_OFF / 8);
+
+        // Gad2 block 1
+        uint8_t* b1 = witness.data() + NIBS_GAD2_B1_BIT_OFF / 8;
+        memcpy(b1, witness.data() + NIBS_GADA_OUT_OFF / 8, NIBS_PKR_BYTES);
+        memcpy(b1 + NIBS_PKR_BYTES, nonce, NIBS_R_BYTES);
+        memcpy(b1 + NIBS_PKR_BYTES + NIBS_R_BYTES, salt, 16);
+        rain_hash_with_sbox_output(b1, b1 + VOLERAINHASH_B_BYTES,
+                                   witness.data() + NIBS_GAD2_H1_OFF / 8);
+
+        // Gad2 block 2
+        const uint8_t* h1 = witness.data() + NIBS_GAD2_H1_OFF / 8;
+        uint8_t* b2 = witness.data() + NIBS_GAD2_B2_BIT_OFF / 8;
+        memset(b2, 0xff, VOLERAINHASH_B_BYTES);
+        memcpy(b2, salt + 16, VOLEMAYO_SALT_BYTES<P::secpar_v> - 16);
+        for (size_t i = 0; i < VOLERAINHASH_B_BYTES; i++) b2[i] ^= h1[i];
+        rain_hash_with_sbox_output(b2, b2 + VOLERAINHASH_B_BYTES,
                                    witness.data() + NIBS_GADGET_2_OUT_OFF / 8);
 
         // random s (MAYO preimage) -- the test's MAYO constraints check T*(s)=t
         std::array<uint8_t, VOLEMAYO_S_BYTES<P::secpar_v>> s;
         memset_rand((uint8_t*)&s, VOLEMAYO_S_BYTES<P::secpar_v>);
 
-        // publish m into the pk slot so the GadM public constraint sees the
-        // right value -- m is a wire expression now, so recompute it in the
-        // clear from (skR, nonce)
-        uint8_t m_pub[NIBS_M_BYTES];
-        nibs_derive_message(sk_r, nonce, m_pub);
+        // publish m = LowMC_K(r) into the pk slot for the GadM public constraint
         memcpy(pk + VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<P::secpar_v>,
                m_pub, NIBS_M_BYTES);
 

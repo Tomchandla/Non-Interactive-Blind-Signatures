@@ -1088,14 +1088,9 @@ enc_constraints_fwd_nth_round(QS* qs_state, size_t round_idx,
 
     using OC = P::OWF_CONSTS;
 
-    size_t witness_offset_bit_curr_state = 0;
-    if (which_rainhash_witness_offset == NIBS_GADGET_M_ST_OFF) {
-        // gadget M: no input block; round r's sbox output lives at ST_OFF + B*(r-1)
-        witness_offset_bit_curr_state = which_rainhash_witness_offset + VOLERAINHASH_B*(round_idx-1);
-    } else {
-        // full gadgets [in | 7 states | out]: round r's sbox output at IN_OFF + B*r
-        witness_offset_bit_curr_state = which_rainhash_witness_offset + VOLERAINHASH_B*(round_idx);
-    }
+    // full gadgets [in | 7 states | out]: round r's sbox output at IN_OFF + B*r
+    size_t witness_offset_bit_curr_state =
+        which_rainhash_witness_offset + VOLERAINHASH_B*(round_idx);
 
     // quicksilver_gfsecpar<QS, deg> state_secpar[VOLERAINHASH_B];
     quicksilver_gf2<QS, deg> state_bits[VOLERAINHASH_B];
@@ -1237,16 +1232,10 @@ enc_constraints_fwd_last_round_and_check(QS* qs_state,
     }
 
     // Getting the hash output from witness and checking it with the above computed.
-    // Gadget M has NO input block: its 7 state blocks start at M_ST_OFF, so the
-    // output block sits at ST_OFF + B*NUM_ROUNDS. Full gadgets (A/1/2) are
-    // [in | 7 states | out], so the output block sits at IN_OFF + B*(NUM_ROUNDS+1).
-    if (which_rainhash_witness_offset == NIBS_GADGET_M_ST_OFF) {
-        witness_offset_bit_curr_state = which_rainhash_witness_offset
-                                      + VOLERAINHASH_B * VOLERAINHASH_NUM_ROUNDS;
-    } else {
-        witness_offset_bit_curr_state = which_rainhash_witness_offset
-                                      + VOLERAINHASH_B * (VOLERAINHASH_NUM_ROUNDS + 1);
-    }
+    // Every Rain gadget is [in | 7 states | out]: the output block sits at
+    // IN_OFF + B*(NUM_ROUNDS+1).
+    witness_offset_bit_curr_state = which_rainhash_witness_offset
+                                  + VOLERAINHASH_B * (VOLERAINHASH_NUM_ROUNDS + 1);
     quicksilver_gf2<QS, deg> hash_out_state_bits[VOLERAINHASH_B];
     for (size_t state_bit_idx = 0; state_bit_idx < VOLERAINHASH_B; state_bit_idx++) {
         const auto state_bit = qs_state->load_witness_1_bit(witness_offset_bit_curr_state + state_bit_idx);
@@ -1816,13 +1805,46 @@ static void enc_constraints(QS* qs_state, const public_key<P>* pk, unsigned char
     qs_dbg_region = "lowmc";
     nibs_lowmc_constraints<QS, P>(qs_state, pk);
 
+    qs_dbg_region = "rainA";
+    // GadA: c = Rain(op | K | 0xff-fill). Lanes 0-1 (op, K) are witness,
+    // lanes 2-3 are the constant fill.
+    {
+        const uint8_t* lc[4] = { nullptr, nullptr, RAIN_CAP16, RAIN_CAP16 };
+        const size_t   lo[4] = { NIBS_GADA_OP_OFF,              // op
+                                 NIBS_GADA_K_OFF,               // K copy
+                                 0, 0 };
+        enc_constraints_rainhash<QS, P, O>(qs_state, pk, NIBS_GADA_IN_OFF, lc, lo);
+    }
+
+    // Seams (lanes bound as GF(2^128) elements; combine is linear and
+    // injective on 128 bits, so element equality == bitwise equality):
+    //   K wires        == GadA in-block K lane          (1)
+    //   GadA out[0:256] == Gad2 B1 c lanes              (2)
+    //   r wires        == Gad2 B1 r lane                (1)
+    qs_dbg_region = "seam";
+    {
+        auto k_lowmc = qs_state->load_witness_128_bits_and_combine(NIBS_K_BIT_OFF);
+        auto k_gada  = qs_state->load_witness_128_bits_and_combine(NIBS_GADA_K_OFF);
+        qs_state->add_constraint(k_lowmc + k_gada);
+
+        for (size_t i = 0; i < 2; i++) {
+            auto c_out = qs_state->load_witness_128_bits_and_combine(NIBS_GADA_OUT_OFF + 128*i);
+            auto c_b1  = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B1_BIT_OFF + 128*i);
+            qs_state->add_constraint(c_out + c_b1);
+        }
+
+        auto r_lowmc = qs_state->load_witness_128_bits_and_combine(NIBS_R_BIT_OFF);
+        auto r_b1    = qs_state->load_witness_128_bits_and_combine(NIBS_GAD2_B1_NONCE_OFF);
+        qs_state->add_constraint(r_lowmc + r_b1);
+    }
+
     qs_dbg_region = "rain1";
-    // Rain gadget 2, block 1: h1 = Rain(pkR | nonce | salt[0..16])
+    // Rain gadget 2, block 1: h1 = Rain(c | r | salt[0..16])
     {
         const uint8_t* lc[4] = { nullptr, nullptr, nullptr, nullptr };
-        const size_t   lo[4] = { NIBS_GAD2_B1_BIT_OFF,          // pkR lo
-                                 NIBS_GAD2_B1_BIT_OFF + 128,    // pkR hi
-                                 NIBS_GAD2_B1_NONCE_OFF,        // nonce
+        const size_t   lo[4] = { NIBS_GAD2_B1_BIT_OFF,          // c lo
+                                 NIBS_GAD2_B1_BIT_OFF + 128,    // c hi
+                                 NIBS_GAD2_B1_NONCE_OFF,        // r
                                  NIBS_GAD2_B1_SALT_OFF };       // salt[0..16]
         enc_constraints_rainhash<QS, P, O>(qs_state, pk, NIBS_GAD2_B1_BIT_OFF, lc, lo);
     }
@@ -1873,11 +1895,13 @@ void owf_constraints(quicksilver_state<P::secpar_v, verifier, P::OWF_CONSTS::QS_
     constexpr auto S = P::secpar_v;
     constexpr auto O = P::owf_v;
 
-    qs_dbg_idx = 0;                        
+    qs_dbg_idx = 0;
     enc_constraints<QS, P, O>(state, pk, chall2);
+#ifdef QS_DEBUG_CONSTRAINTS
     if constexpr (!verifier)
         fprintf(stderr, "constraints emitted: %zu (declared: %zu)\n",
                 qs_dbg_idx, (size_t)P::OWF_CONSTS::OWF_NUM_CONSTRAINTS);
+#endif
 }
 
 

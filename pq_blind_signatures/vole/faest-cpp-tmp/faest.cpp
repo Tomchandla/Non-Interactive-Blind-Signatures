@@ -1285,6 +1285,20 @@ void get_rainhash_then_mayo128sv1_parameters(size_t *chal1_size,
 // V1
 // 128s/f
 extern "C" {
+    // pkR = c = first 32 bytes of RainHash( op | K | 0xff-fill ).
+    // In-the-clear mirror of GadA; KeyGenR and Obtain call this via FFI.
+    void nibs_rain_pkr(const uint8_t* op, const uint8_t* k, uint8_t* pkr) {
+        uint8_t in[faest::VOLERAINHASH_B_BYTES];
+        uint8_t out[faest::VOLERAINHASH_B_BYTES];
+        memset(in, 0xff, sizeof(in));
+        memcpy(in, op, faest::NIBS_OP_BYTES);
+        memcpy(in + faest::NIBS_OP_BYTES, k, faest::NIBS_K_BYTES);
+        rain_hash(in, out);
+        memcpy(pkr, out, faest::NIBS_PKR_BYTES);
+    }
+}
+
+extern "C" {
     bool rainhash_then_mayo128sv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
                 uint8_t* expanded_pk, uint8_t* msg_hash,
                 uint8_t* rain_rc, uint8_t* rain_mat,
