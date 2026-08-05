@@ -90,12 +90,10 @@ template <secpar S, owf O> constexpr std::size_t compute_owf_num_enc_constraints
     #if defined WITH_RAINHASH
         constexpr std::size_t mayo_constraints = 1;
         constexpr std::size_t lowmc_constraints =
-            (NIBS_LOWMC_PRF_ROUNDS_C + NIBS_LOWMC_PRF_ROUNDS_C) * NIBS_LOWMC_N;   
-        constexpr std::size_t seam_constraints = 256 + 128;
-        constexpr std::size_t m_public_constraints = 256;
-        constexpr std::size_t rainhash_constraints = 2 * (4 * VOLERAINHASH_NUM_ROUNDS + 4); // 64
-        // B1 -> B2 chaining: lanes 1-3 as field elements (3) + lane 0's
-        // 64 pad bits individually (the salt tail is deliberately unbound).
+            NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BLOCK_BITS;
+        constexpr std::size_t seam_constraints = NIBS_SEAM_CONSTRAINTS; // 4
+        constexpr std::size_t m_public_constraints = NIBS_PUBLIC_M_CONSTRAINTS;
+        constexpr std::size_t rainhash_constraints = 3 * (4 * VOLERAINHASH_NUM_ROUNDS + 4); // 96
         constexpr std::size_t chaining_constraints = 3 + 64;
         return mayo_constraints + lowmc_constraints + seam_constraints +
                m_public_constraints + rainhash_constraints +
@@ -189,13 +187,12 @@ struct OWF_CONSTANTS
     #endif
 
     #if defined WITH_RAINHASH
-    // one Rain gadget (Gad2) + the three LowMC gadgets' S-box layers + MAYO.
+    // three Rain invocations (GadA, Gad2 B1/B2) + GadM's S-box layer + MAYO.
     // (Kept for symmetry with the Keccak branch; nothing sizes off this in
     // the RAINHASH build -- OWF_NUM_CONSTRAINTS below is what matters.)
     constexpr static std::size_t OWF_ENC_SBOXES =
-        2 * VOLERAINHASH_NUM_ROUNDS +
-        (NIBS_LOWMC_PRF_ROUNDS_C +
-         NIBS_LOWMC_PRF_ROUNDS_C) * NIBS_LOWMC_BOXES_C + VOLEMAYO_M<S>;
+        3 * VOLERAINHASH_NUM_ROUNDS +
+        NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BOXES + VOLEMAYO_M<S>;
     #endif
 
     constexpr static std::size_t OWF_ENC_CONSTRAINTS =
