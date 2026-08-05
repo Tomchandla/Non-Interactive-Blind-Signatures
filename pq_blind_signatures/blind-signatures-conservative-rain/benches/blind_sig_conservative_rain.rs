@@ -133,7 +133,7 @@ fn report(name: &str, t: &Timings, setup_ms: f64) -> String {
     s.push_str(&format!("│ {:<56} │\n", format!("NIBS  LowMC + MAYO + RainHash + VOLEitH   [{name}]")));
     s.push_str(&format!("├{rule}┤\n"));
 
-    s.push_str(&format!("│ {:<56} │\n", "Phase                                    mean over 50 runs"));
+    s.push_str(&format!("│ {:<56} │\n", "Phase                                  mean over 50 runs"));
     for (label, ms) in [
         ("keygen_signer", t.keygen_signer),
         ("keygen_recipient", t.keygen_recipient),
@@ -155,7 +155,7 @@ fn report(name: &str, t: &Timings, setup_ms: f64) -> String {
         ("signature    |sigma|", t.sig_bytes),
     ] {
         s.push_str(&format!(
-            "│   {:<28}{:>10.3} KB{:>10} B │\n",
+            "│   {:<28}{:>10.3} KB{:>10} B  │\n",
             label,
             bytes as f64 / 1024.0,
             bytes
