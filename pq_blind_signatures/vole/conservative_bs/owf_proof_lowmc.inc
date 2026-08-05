@@ -1,16 +1,13 @@
 #ifndef OWF_PROOF_LOWMC_INC
 #define OWF_PROOF_LOWMC_INC
 
-// Single LowMC gadget for Algorithm 2:  m = LowMC_K(r), with K at
-// NIBS_K_BIT_OFF, r at NIBS_R_BIT_OFF, post-S-box states at NIBS_GADM_ST_OFF
-// and m bound to the PUBLIC statement (pk->msg). Width-generic: everything is
-// sized off lowmc_params.hpp, never a literal 256/32.
+// Single LowMC gadget for NIBS
 
 template <typename QS> using lowmc_bit = quicksilver_gf2<QS, 1>;
 template <typename QS>
 using lowmc_blk = std::array<lowmc_bit<QS>, NIBS_LOWMC_BLOCK_BITS>;
 
-// --- wire helpers ------------------------------------------------------------
+// wire helpers
 template <typename QS>
 static inline lowmc_bit<QS> lowmc_const_bit(QS* qs, int v)
 {
@@ -63,7 +60,6 @@ static inline void lowmc_xor_inplace(lowmc_blk<QS>& a, const lowmc_blk<QS>& b)
     for (size_t i = 0; i < NIBS_LOWMC_BLOCK_BITS; ++i) a[i] = a[i] + b[i];
 }
 
-// --- the LowMC gadget --------------------------------------------------------
 template <typename QS>
 static lowmc_blk<QS> lowmc_gadget(QS* qs, const lowmc_blk<QS>& key,
                                   const lowmc_blk<QS>& pt, size_t st_bit_off)
@@ -87,20 +83,16 @@ static lowmc_blk<QS> lowmc_gadget(QS* qs, const lowmc_blk<QS>& key,
             quicksilver_gfsecpar<QS, 1> A(a_in), B(b_in), C(c_in);
             quicksilver_gfsecpar<QS, 1> X(x_o), Y(y_o), Z(z_o);
 
-            // x = a + b*c ; y = a + b + a*c ; z = a + b + c + a*b
             qs->add_constraint(B * C + quicksilver_gfsecpar<QS, 2>(X + A));
             qs->add_constraint(A * C + quicksilver_gfsecpar<QS, 2>(Y + A + B));
             qs->add_constraint(A * B +
                                quicksilver_gfsecpar<QS, 2>(Z + A + B + C));
         }
-        // identity bits (top of the block) pass through unchanged
         for (unsigned i = 3 * NIBS_LOWMC_BOXES; i < NIBS_LOWMC_BLOCK_BITS; ++i)
             qs->add_constraint(quicksilver_gfsecpar<QS, 2>(
                 quicksilver_gfsecpar<QS, 1>(y[i]) +
                 quicksilver_gfsecpar<QS, 1>(state[i])));
 
-        // in_{r+1} (or the output after the last round):
-        //   L_{r-1} * y  ^  C_{r-1}  ^  RK_r
         state = lowmc_matmul(qs, nibs_lowmc_linmat(r - 1), y);
         lowmc_blk<QS> rc = lowmc_const_block(qs, nibs_lowmc_roundconst(r - 1));
         lowmc_xor_inplace(state, rc);
@@ -115,14 +107,12 @@ static void nibs_lowmc_constraints(QS* qs, const public_key<P>* pk)
 {
     nibs_lowmc_init();
 
-    // ---- witness wires: K and r (shared with the Rain gadgets) --------------
+    // witness wires: K and r
     lowmc_blk<QS> K = lowmc_load_witness_block(qs, NIBS_K_BIT_OFF);
     lowmc_blk<QS> r = lowmc_load_witness_block(qs, NIBS_R_BIT_OFF);
 
-    // ---- GadM: m = LowMC_K(r), r is the plaintext block verbatim ------------
+    // GadM
     lowmc_blk<QS> m_wires = lowmc_gadget(qs, K, r, NIBS_GADM_ST_OFF);
-
-    // ---- m is PUBLIC: bind the final state to the statement -----------------
     const uint8_t* m_pub = (const uint8_t*)&pk->msg;
     for (size_t i = 0; i < NIBS_M_BITS; ++i) {
         int pub = (m_pub[i >> 3] >> (i & 7)) & 1;
