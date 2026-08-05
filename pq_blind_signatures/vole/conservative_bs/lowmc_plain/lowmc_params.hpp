@@ -1,8 +1,6 @@
 // lowmc_params.hpp -- LowMC parameter sets for NIBS at NIST security
 // levels 1, 3 and 5.
 //
-// Copyright (c) 2026 Thomas Chandler.
-//
 // Round counts are pulled from the LowMC reference repository, 
 // https://github.com/LowMC/lowmc (MIT licensed), which implements the 
 // round formula of "Ciphers for MPC and FHE", EUROCRYPT 2015
