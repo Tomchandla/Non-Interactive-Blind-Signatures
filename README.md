@@ -4,7 +4,7 @@
 
 This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) — itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) — with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. The implementation extends the interactive blind signature of Baum, Beckmann, Beullens, Mukherjee and Rechberger ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing in the interactive setting.
 
-**Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi, Goyal and Yadav ([BGY26](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
+**Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi, Goyal and Yadav ([BGY24](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
 
 ## Contributions
 
