@@ -1,100 +1,91 @@
-# Non-interactive blind signatures from MAYO, LowMC and Rain over VOLEitH
+# Towards Practical Post-Quantum Non-Interactive Blind Signatures from VOLE-in-the-Head
 
-This project converts the interactive blind signature of ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)) into a non-interactive blind signature (NIBS) in the model introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) and improved upon by Baldimtsi et al. ([BCGY24](https://eprint.iacr.org/2024/037)). It takes the *conservative RainHash* variant of [BBBMR26] as its starting template and aligns it to the generic NIBS construction of [BCGY24] (PRF + commitment + signature + NIZK), instantiated with a **mixed LowMC/Rain circuit**: LowMC as the PRF and commitment, Rain as the message hash internal to MAYO.
+## Overview
 
-**Research question.** NIBS has been realised from lattices — most recently the batched construction of Baldimtsi, Goyal and Yadav ([BGY25](https://eprint.iacr.org/2025/1771.pdf)), secure under randomised one-more-ISIS and standard lattice assumptions in the ROM. This project asks whether a **multivariate + VOLEitH** instantiation gives a competitive or better NIBS, and if so whether the same composition transfers to related primitives such as group signatures.
+This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) — itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) — with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. The implementation extends the interactive blind signature of Baum, Beckmann, Beullens, Mukherjee and Rechberger ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing in the interactive setting.
 
----
+**Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi, Goyal and Yadav ([BGY26](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
 
-## Construction
+## Contributions
 
-Notation: `PT(δ, x) = δ ‖ x ‖ 0*` is a 256-bit plaintext block with domain byte δ (`δ_pk = 0x01`, `δ_m = 0x02`, `δ_com = 0x03`). `E_prf` is 13-round LowMC (n = k = 256, m = 85, d = 2^64); `E_h` is the 22-round instance (d = 2^256). `MMO(c, x) = E_h_c(x) ⊕ x`. Rain is the 512-bit, 7-round instance.
+1. **An efficient post-quantum NIBS instantiation.** Signatures of **23.69 KB** at `SV1_128`, a >12× reduction over the state-of-the-art lattice NIBS, under UOV/WMQ and LowMC assumptions rather than lattice assumptions.
+2. **A simplified generic framework.** The framework of [BCGY24] requires a signature scheme, a NIZKPoK, a PRF *and* a commitment scheme. We show the PRF and the commitment can be collapsed into a single **strong pseudorandom permutation** (sPRP), with proof sketches for one-more unforgeability, strong receiver blindness and strong nonce blindness.
 
-### NIBS from lattice assumptions ([BGY25], for comparison)
-
-```
-Setup   : <fill>
-KeyGenS : <fill>
-KeyGenR : <fill>
-Issue   : <fill>
-Obtain  : <fill>
-Verify  : <fill>
-```
-
-### NIBS from MAYO + LowMC + Rain (this work)
+## Project Structure
 
 ```
-Setup   : pp = MAYO public params + LowMC/Rain instances + FAEST params
-KeyGenS : (pkS, skS) ← MAYO.KeyGen                        // signer, unchanged
-KeyGenR : K ←$ {0,1}^256 ; s ←$ {0,1}^128
-          pkR = E_prf_K(PT(δ_pk, s)) ; skR = (K, s)
-Issue   : nonce ←$ {0,1}^128
-          presig = MAYO.Sign^H(skS, pkR ‖ nonce)
-          // MAYO's message hash H, composed:
-          //   com = MMO(pkR, PT(δ_com, nonce))            (LowMC)
-          //   t   = Rain(com ‖ salt ‖ 0xff^8)             (Rain)
-          // then sample s_M with P*(s_M) = t
-Obtain  : recompute pkR ; check presig against pkR ‖ nonce
-          m = E_prf_K(PT(δ_m, nonce))
-          π = VOLEitH proof of the circuit below ; output (m, π)
-Verify  : FAEST verify with public (pkS, m)
+Non-Interactive-Blind-Signatures/
+└── pq_blind_signatures/
+    ├── blind-signatures-conservative-rain/   # NIBS protocol layer (Rust)
+    │   ├── src/                              # KeyGenS/R, Issue, Obtain, Verify
+    │   └── benches/                          # Criterion benchmarks
+    ├── mayo-c-sys/                           # FFI to MAYO-C
+    ├── mayo-c-rain-sys/                      # FFI to MAYO with RainHash internals
+    ├── vole-rainhash-then-mayo-sys/          # FFI to the VOLEitH circuit
+    ├── vole/                                 # C++ VOLEitH proof system (FAEST)
+    │   ├── faest-cpp-tmp/                    # shared build folder
+    │   ├── conservative_bs/                  # circuit definitions
+    │   │   └── owf_proof.inc 
+    |   ├── lowmc_plain/
+    |   |   └── lowmc.cpp               
+    │   └── build_consv_bs_rainhash.sh
+    ├── MAYO-C/                               # git submodule (CMake)
+    └── bench_rainhash_bs.sh
 ```
 
-There is no recipient→signer message: the signer derives the MAYO target itself from `(pkR, nonce)` — the MMO step is part of the composed message hash, not a protocol-level commitment — and the recipient finalises the presignature locally. Presignatures and nonces are precomputable offline and may be published.
+The C and C++ components are built as shared libraries and reached from Rust through `bindgen`-generated foreign function interfaces; the protocol layer itself is Rust. All VOLEitH circuits share one build directory, so the crates cannot be built concurrently.
 
-### Verification circuit (mixed LowMC/Rain)
+## Requirements and Installation
 
-```
-GadA  : pkR = E_prf_K(PT(δ_pk, s))                LowMC 13r    witness: K, s
-Gad1  : com = MMO(pkR, PT(δ_com, nonce))          LowMC 22r    witness: nonce
-Gad2  : t   = Rain(com ‖ salt ‖ 0xff^8)           Rain 7r      witness: salt   (unchanged)
-MAYO  : P*(s_M) = t                                            witness: s_M    (unchanged)
-GadM  : m   = E_prf_K(PT(δ_m, nonce))             LowMC 13r    output == public m
-```
+Developed and tested on Ubuntu 24.04.4 LTS under WSL2 (kernel 6.18.33.2). The versions below are what our build was verified against, not established minimums — older releases may well work, but we have not tested them.
 
-`pkR`, `com` and `t` are intermediate values, never public — the verifier learns only `(pkS, m)`, which is what unlinkability requires.
+| Tool | Tested version | Notes |
+|---|---|---|
+| GCC | 14.3.0 | See note below — the version in the 24.04 archive is too old |
+| Rust (cargo/rustc) | 1.96.1 | Crates use edition 2024, so 1.85 is the effective floor |
+| meson | 1.11.1 | Install with `pipx`; the apt package is older |
+| ninja | 1.13.0 | Install with `pipx` |
+| pipx | 1.4.3 | `sudo apt install pipx && pipx ensurepath` |
+| libclang | 18.1.3 | Required by `bindgen` for the Rust FFI |
+| cmake | 3.28.3 | Required to build the MAYO-C submodule (declares a 3.10 minimum) |
+| gnuplot | 6.0 | Optional, for Criterion benchmark plots |
+| Python | 3.12.3 | |
 
-**Gadget split.** The primitive is selected per gadget by two questions — is it keyed by a secret the adversary cannot query, and is its input adversarially controllable?
-- `GadA`/`GadM` are keyed by `K`, which the adversary never sees: PRF strength at d = 2^64 suffices (13 rounds).
-- `Gad1` compresses under the *public* `pkR` with adversarially-influenced input, so it needs collision resistance: 22 rounds under MMO.
-- `Gad2` also needs collision resistance, but its input is already compressed — Rain wins decisively there (4 constraints/round vs 255).
+**GCC.** The meson project builds with `c_std=c23` and `cpp_std=c++23`, which needs GCC 14. Ubuntu 24.04 ships GCC 13.3, so a newer toolchain must be installed from a PPA (or built from source) before anything will compile.
 
-**Binding.** Most inter-gadget binding is structural and free: `K` is one set of witness wires consumed by both `GadA` and `GadM`; `nonce` by `Gad1` and `GadM`. One seam is **not** free: the LowMC gadgets emit `com` as a linear expression over committed bits, while the Rain loader consumes lane-combined field elements, so binding `Gad2`'s input to `Gad1`'s output costs **256 explicit F₂ equality constraints**, and the public output `m` costs another 256. These 512 constraints are the measured price of the primitive split.
-
-**Domain separation.** The bytes `δ_pk`, `δ_m`, `δ_com` keep the LowMC uses disjoint. Without them the signer — who knows `pkR` and `nonce` — could relate `m` to issuance-time values and blindness would fail; `m` depending on `K` (which the signer never sees) is what makes it unlinkable.
-
-**Salting** MAYO1's salt is 24 bytes, so it straddles the 128-bit lane boundary of the Rain input block (lane 2 + half of lane 3); both lanes must be witness-loaded. Treating lane 3 as constant pad silently truncates the salt in-circuit and is invisible to honest-execution testing. Revisit at L3/L5 (32- and 40-byte salts).
-
----
-
-## Sizes (L1, mixed layout)
+**libclang.** If `bindgen` fails to locate libclang, or picks up an older LLVM installation, point it at the right one explicitly:
 
 ```
-K + s + nonce                        512 bits
-GadA post-S-box states  (13 × 256)  3328
-Gad1 post-S-box states  (22 × 256)  5632
-GadM post-S-box states  (13 × 256)  3328
-Gad2 input block                     512
-Gad2 Rain states         (7 × 512)  3584
-Gad2 output block                    512
-                                   -----
-WITNESS_SIZE_BITS                  17408 bits = 2176 B   (+ MAYO preimage s_M)
+export LIBCLANG_PATH=/usr/lib/llvm-18/lib
 ```
 
-## Measured results (preliminary — correctness verification in progress)
+**Submodules.** MAYO-C is a git submodule and is built with CMake, so clone with `--recurse-submodules` (or run `git submodule update --init` afterwards). A missing submodule surfaces as a CMake error rather than an obvious "not initialised" message.
 
-| | FV1_128 | FV2_128 | SV1_128 | SV2_128 |
+**Stack size.** The MAYO map evaluation overflows Rust's default thread stack. Export
+`RUST_MIN_STACK=8388608` before running tests or benchmarks.
+
+**Reproducibility.** The C/C++ components compile with `-march=native -mtune=native`, so the resulting binaries are specific to the build machine.
+
+Running from a VS Code terminal is convenient, as it resolves the toolchain and environment variables automatically.
+
+### Build
+
+Instructions for setting up the build are below. If a build fails after changes to the circuit, note that rebuilding the C++ library alone does not propagate through the FFI: clean the FFI crate and the protocol crate as well before rebuilding. A step-by-step guide is in [`INSTALL.md`](INSTALL.md).
+
+## Results
+
+Single core of an Intel i5-14400F under WSL2, means over 50 executions, single-threaded. One-time LowMC instance generation (22.9 ms) is excluded.
+
+| Phase (ms) | SV1_128 | SV2_128 | FV1_128 | FV2_128 |
 |---|---|---|---|---|
-| τ | 16 | 16 | 9 | 11 |
-| \|σ\| (KB) | 43.78 | 43.75 | **25.52** | 30.50 |
-| \|presig\| (KB) | 0.443 | 0.443 | 0.443 | 0.443 |
-| Obtain / Verify (ms) | 54 / 52 | 56 / 53 | 122 / 127 | 62 / 57 |
+| KeyGenS | 2.70 | 2.81 | 2.72 | 2.70 |
+| KeyGenR | 0.24 | 0.25 | 0.24 | 0.25 |
+| Issue | 5.83 | 5.99 | 5.81 | 5.82 |
+| Obtain (prove) | 135.85 | 64.56 | 56.95 | 56.45 |
+| Verify | 132.42 | 60.09 | 51.71 | 51.55 |
+| \|σpre\| (KB) | 0.443 | 0.443 | 0.443 | 0.443 |
+| \|σ\| (KB) | **23.69** | 28.27 | 40.53 | 40.50 |
 
-Signer→recipient communication is 0.459 KB (presig + nonce), ~14–20% below [BGY25]'s 0.68 KB. LowMC instance generation is a one-time 237 ms cost.
+## Credits
 
-**Vs lattice NIBS [BGY25]** (306 KB unbatched, conservative): ~12× smaller at SV1, ~7× at FV1 — under multivariate (UOV/WMQ) + LowMC assumptions rather than lattices. BGY25's efficiency story is *amortized* batching, out of scope here, so this compares single-shot sizes only.
-
-## Open optimisations
-
-1. Eliminate in-circuit verification of MAYO's message hash by binding the target through a one-time pad, adapting [BBBMR26]'s technique — the non-interactive obstacle is that there is no recipient→signer message in which to commit to the pad, so it must be bound through the recipient's published key material.
-2. Commit less LowMC round state: the current layout commits every post-S-box state in full, but the 255-of-256 bits per round through the S-box layer are not all independently required.
+This implementation builds on the reference implementation accompanying [BBBMR26](https://github.com/shibammukherjee/pq_blind_signatures) by Baum, Beckmann, Beullens, Mukherjee and Rechberger. The build system, the VOLEitH/FAEST proof system, the MAYO integration and the RainHash construction are theirs; the NIBS protocol layer, the LowMC gadget and the modified target derivation are ours. Third-party components carry their own licences: FAEST (MIT, FAEST Team), MAYO-C (Apache-2.0), and gsl-lite (MIT, Martin Moene / Microsoft).
