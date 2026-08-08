@@ -11,7 +11,6 @@
 #include <string.h>
 #include <stdalign.h>
 #include <mayo.c>
-#define WITH_RAINHASH
 #include <faest.h>
 
 #include <stdio.h>

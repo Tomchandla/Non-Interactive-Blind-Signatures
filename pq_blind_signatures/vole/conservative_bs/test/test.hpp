@@ -7,14 +7,8 @@
 #include "polynomials.hpp"
 #include "quicksilver.hpp"
 
-extern "C" {
-    #include "fips202.h"
-}
-
-#if defined WITH_RAINHASH
 #include "../rainhash_plain/rain_hash.h"
 #include "../lowmc_plain/lowmc.hpp"
-#endif
 
 #include <algorithm>
 #include <array>
@@ -162,71 +156,6 @@ template <secpar S, size_t max_deg> struct quicksilver_test_state_pre_quicksilve
     }
 };
 
-#if defined KECCAK_DEG_16
-template <secpar S, size_t max_deg = 16>
-struct quicksilver_test_state : public quicksilver_test_state_pre_quicksilver<S, max_deg>
-{
-    using base = quicksilver_test_state_pre_quicksilver<S, max_deg>;
-    using QS_CONS = base::QS_CONS;
-    using QSP = quicksilver_state<S, false, max_deg>;
-    using QSV = quicksilver_state<S, true, max_deg>;
-
-    QSP prover_state;
-    QSV verifier_state;
-
-    quicksilver_test_state(size_t num_constraints, const uint8_t* witness_in, size_t witness_bits,
-                           block_secpar<S> delta)
-        : base(witness_in, witness_bits, delta),
-          prover_state(this->witness.data(), this->tags.data(), num_constraints,
-                       this->challenge.data()),
-          verifier_state(this->keys.data(), num_constraints, delta, this->challenge.data())
-    {
-    }
-
-    template <size_t deg>
-        requires(deg <= QSP::max_degree)
-    bool check_mac(const quicksilver_gf2<QSP, deg>& x_p, const quicksilver_gf2<QSV, deg>& x_v) const
-    {
-        auto z = poly_secpar<S>::from_1(x_p.value());
-        const auto delta = verifier_state.delta();
-        for (size_t i = 1; i <= deg; ++i)
-        {
-            z = (z * delta).template reduce_to<secpar_to_bits(S)>();
-            z += x_p.mac.coeffs[deg - i];
-        }
-
-        return z == x_v.mac;
-    }
-
-    template <size_t deg>
-        requires(deg <= QSP::max_degree)
-    bool check_mac(const quicksilver_gfsecpar<QSP, deg>& x_p,
-                   const quicksilver_gfsecpar<QSV, deg>& x_v) const
-    {
-        auto z = x_p.value();
-        const auto delta = verifier_state.delta();
-        for (size_t i = 1; i <= deg; ++i)
-        {
-            z = (z * delta).template reduce_to<secpar_to_bits(S)>();
-            z += x_p.mac.coeffs[deg - i];
-        }
-
-        return z == x_v.mac;
-    }
-
-    std::array<std::array<uint8_t, QS_CONS::CHECK_BYTES>, 2> compute_check() const
-    {
-        std::array<uint8_t, QS_CONS::PROOF_BYTES> proof;
-        std::array<uint8_t, QS_CONS::CHECK_BYTES> check_prover, check_verifier;
-
-        size_t witness_bits = 8 * this->witness.size() - (max_deg - 1) * secpar_to_bits(S);
-        prover_state.prove(witness_bits, proof.data(), check_prover.data());
-        verifier_state.verify(witness_bits, proof.data(), check_verifier.data());
-
-        return {check_prover, check_verifier};
-    }
-};
-#else
 template <secpar S, size_t max_deg = 2>
 struct quicksilver_test_state : public quicksilver_test_state_pre_quicksilver<S, max_deg>
 {
@@ -290,7 +219,6 @@ struct quicksilver_test_state : public quicksilver_test_state_pre_quicksilver<S,
         return {check_prover, check_verifier};
     }
 };
-#endif
 
 // --- START ---
 
@@ -336,29 +264,7 @@ inline void memset_rand(unsigned char* in, size_t byte_size) {
 
 template <typename P> inline void set_pk(unsigned char* pk) {
 
-    #if defined WITH_KECCAK
-        size_t pk_offset = 0;
 
-        memset_rand_mayo(pk, VOLEMAYO_PK_SEED_BYTES<P::secpar_v>);                
-        pk_offset += VOLEMAYO_PK_SEED_BYTES<P::secpar_v>;
-
-        // NOTE: P1 are stored in coloumn major!!
-        memset_rand_mayo(pk + pk_offset, VOLEMAYO_P1_SIZE_BYTES<P::secpar_v>);                
-        pk_offset += VOLEMAYO_P1_SIZE_BYTES<P::secpar_v>;
-
-        // NOTE: P2 are stored in coloumn major!!
-        memset_rand_mayo(pk + pk_offset, VOLEMAYO_P2_SIZE_BYTES<P::secpar_v>);    
-        pk_offset += VOLEMAYO_P2_SIZE_BYTES<P::secpar_v>;
-
-        // NOTE: P3 are stored in coloumn major!!
-        memset_rand_mayo(pk + pk_offset, VOLEMAYO_P3_SIZE_BYTES<P::secpar_v>);    
-        pk_offset += VOLEMAYO_P3_SIZE_BYTES<P::secpar_v>;    
-
-        // NOTE: Setting the msg of lambda length
-        memset_rand(pk + pk_offset, HASHED_MSG_SIZE_BYTES<P::secpar_v>);     
-    #endif
-
-    #if defined WITH_RAINHASH
 
         size_t pk_offset = 0;
 
@@ -375,28 +281,12 @@ template <typename P> inline void set_pk(unsigned char* pk) {
         pk_offset += VOLERAINHASH_RC_SIZE_BYTES; 
         memcpy(pk + pk_offset, (uint8_t*)rain_matrix.data(), VOLERAINHASH_MAT_SIZE_BYTES);
 
-    #endif
 
 }
 
 template <typename P> inline void set_sk(uint8_t* sk, uint8_t* witness, uint8_t* pk,  uint8_t* s) {
 
-    #if defined WITH_KECCAK
-        // copying all the mayo pk stuff to sk
-        memcpy(sk, pk, VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>);
-        size_t sk_offset = VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>;
 
-        // Keccak has no public part
-
-        // NOTE: First keccak happens, so store keccak first after pk
-        memcpy(sk + sk_offset, witness, VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>);
-        sk_offset += VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>;
-
-        // NOTE: storing the mayo sk
-        memcpy(sk + sk_offset, s, VOLEMAYO_S_BYTES<P::secpar_v>);
-    #endif
-
-    #if defined WITH_RAINHASH
         // copying all the mayo pk stuff to sk
         memcpy(sk, pk, VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>);
         size_t offset = VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>;
@@ -411,7 +301,6 @@ template <typename P> inline void set_sk(uint8_t* sk, uint8_t* witness, uint8_t*
 
         // NOTE: storing the mayo sk
         memcpy(sk + offset, s, VOLEMAYO_S_BYTES<P::secpar_v>);
-    #endif
 
 }
 
@@ -423,73 +312,7 @@ template <typename P> inline void set_sk(uint8_t* sk, uint8_t* witness, uint8_t*
 template <typename P> inline void test_gen_keypair(unsigned char* pk, unsigned char* sk)
 {
     
-    #if defined WITH_KECCAK
-        set_pk<P>(pk);              // setting the pk part
 
-        std::array<uint8_t, VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>> witness;
-        memset((uint8_t*)witness.data(), 0x00, VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>);
-
-        std::array<uint8_t, VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>> keccak_input;
-        memset((uint8_t*)keccak_input.data(), 0x00, VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>);   // just initializing stuff to all 0
-        
-        size_t offset = 0;        
-        // public
-        size_t pk_offset = VOLEMAYO_PK_SEED_BYTES<P::secpar_v> + VOLEMAYO_P1_SIZE_BYTES<P::secpar_v> + VOLEMAYO_P2_SIZE_BYTES<P::secpar_v> + VOLEMAYO_P3_SIZE_BYTES<P::secpar_v>;
-        // public
-        memcpy((uint8_t*)keccak_input.data() + offset, pk + pk_offset, HASHED_MSG_SIZE_BYTES<P::secpar_v>);   // some msg hash
-        offset += HASHED_MSG_SIZE_BYTES<P::secpar_v>;
-        // witness
-        memset_rand((uint8_t*)keccak_input.data() + offset, RAND_SIZE_BYTES<P::secpar_v>);
-        memcpy((uint8_t*)witness.data(), (uint8_t*)keccak_input.data() + offset, RAND_SIZE_BYTES<P::secpar_v>);   
-
-        #if defined KECCAK_DEG_16
-            shake256_w((uint8_t*)witness.data() + RAND_SIZE_BYTES<P::secpar_v>,
-                    (uint8_t*)keccak_input.data(), VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>);
-        #else
-            shake256_w((uint8_t*)witness.data() + RAND_SIZE_BYTES<P::secpar_v>,
-                    (uint8_t*)keccak_input.data(), VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>);
-        #endif
-
-
-        #if defined KECCAK_DEG_16
-            size_t input_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS/6);
-            size_t witness_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS/6 + 1);
-            size_t output_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS/6)
-                                + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS/6);
-                    
-            // copying the digest bytes to a new input block witness
-            size_t prev_output_idx = (RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES*((VOLEKECCAK_NUM_ROUNDS/6) - 1));
-            memcpy((uint8_t*)witness.data() + input_idx, (uint8_t*)witness.data() + prev_output_idx, VOLEMAYO_DIGEST_BYTES<P::secpar_v>);
-
-            // copying the signature salt bytes to a new input block witness after digest bytes
-            memset_rand((uint8_t*)witness.data() + input_idx + VOLEMAYO_DIGEST_BYTES<P::secpar_v>, VOLEMAYO_SALT_BYTES<P::secpar_v>);
-
-            shake256_w((uint8_t*)witness.data() + witness_idx,
-                    (uint8_t*)witness.data() + input_idx, VOLEKECCAK_MAYO_HASH_INPUT_BYTES<P::secpar_v>);
-        #else
-            size_t input_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS);
-            size_t witness_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS + 1);
-            size_t output_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS)
-                                + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS);
-        
-            // copying the digest bytes to a new input block witness
-            size_t prev_output_idx = (RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES*((VOLEKECCAK_NUM_ROUNDS) - 1));
-            memcpy((uint8_t*)witness.data() + input_idx, (uint8_t*)witness.data() + prev_output_idx, VOLEMAYO_DIGEST_BYTES<P::secpar_v>);
-
-            // copying the signature salt bytes to a new input block witness after digest bytes
-            memset_rand((uint8_t*)witness.data() + input_idx + VOLEMAYO_DIGEST_BYTES<P::secpar_v>, VOLEMAYO_SALT_BYTES<P::secpar_v>);
-
-            shake256_w((uint8_t*)witness.data() + witness_idx,
-                    (uint8_t*)witness.data() + input_idx, VOLEKECCAK_MAYO_HASH_INPUT_BYTES<P::secpar_v>);
-        #endif
-
-        std::array<uint8_t, VOLEMAYO_S_BYTES<P::secpar_v>> s;
-        memset_rand((uint8_t*)&s, VOLEMAYO_S_BYTES<P::secpar_v>);
-
-        set_sk<P>(sk, (uint8_t*)witness.data(), pk, (uint8_t*)&s);
-    #endif
-
-    #if defined WITH_RAINHASH
         set_pk<P>(pk);
 
         std::array<uint8_t, VOLERAINHASH_WITNESS_SIZE_BYTES<P::secpar_v>> witness;
@@ -541,7 +364,6 @@ template <typename P> inline void test_gen_keypair(unsigned char* pk, unsigned c
                m_pub, NIBS_M_BYTES);
 
         set_sk<P>(sk, witness.data(), pk, (uint8_t*)&s);
-    #endif
       
 }
 

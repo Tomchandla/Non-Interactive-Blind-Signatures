@@ -81,13 +81,7 @@ template <secpar S, owf O> constexpr std::size_t compute_owf_num_key_schedule_co
 // Compute the number of encryption constraints for an OWF.
 template <secpar S, owf O> constexpr std::size_t compute_owf_num_enc_constraints()
 {
-    #if defined WITH_KECCAK
-        constexpr std::size_t mayo_constraints = 1;
-        constexpr std::size_t keccak_constraints = VOLEKECCAK_WITNESS_SIZE_BITS<S>;
-        return mayo_constraints + keccak_constraints;
-    #endif
 
-    #if defined WITH_RAINHASH
         constexpr std::size_t mayo_constraints = 1;
         constexpr std::size_t lowmc_constraints =
             NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BLOCK_BITS;
@@ -98,7 +92,6 @@ template <secpar S, owf O> constexpr std::size_t compute_owf_num_enc_constraints
         return mayo_constraints + lowmc_constraints + seam_constraints +
                m_public_constraints + rainhash_constraints +
                chaining_constraints;                                              
-    #endif
     
 }
 
@@ -124,12 +117,7 @@ struct OWF_CONSTANTS
 {
     constexpr static std::size_t OWF_KEY_SCHEDULE_SBOXES = 0;
     constexpr static std::size_t OWF_KEY_SCHEDULE_CONSTRAINTS = 0;
-    #if defined WITH_KECCAK
-        constexpr static std::size_t OWF_KEY_WITNESS_BITS = VOLEMAYO_WITNESS_SIZE_BITS<S> + VOLEKECCAK_WITNESS_SIZE_BITS<S>;//get_witness_bit_size_mayo_plus_keccak(S);
-    #endif
-    #if defined WITH_RAINHASH
         constexpr static std::size_t OWF_KEY_WITNESS_BITS = VOLEMAYO_WITNESS_SIZE_BITS<S> + VOLERAINHASH_WITNESS_SIZE_BITS<S>;//get_witness_bit_size_mayo_plus_rainhash(S);
-    #endif
     constexpr static std::size_t OWF_BLOCK_SIZE = 1;
     constexpr static std::size_t OWF_BLOCKS = 1;
     constexpr static std::size_t OWF_ROUNDS = 1;
@@ -182,18 +170,13 @@ struct OWF_CONSTANTS
                                                     0x0000000080000001,
                                                     0x8000000080008008,}; 
 
-    #if defined WITH_KECCAK
-    constexpr static std::size_t OWF_ENC_SBOXES = (5*5*VOLEKECCAK_W*VOLEKECCAK_NUM_ROUNDS) + VOLEMAYO_M<S>;
-    #endif
 
-    #if defined WITH_RAINHASH
     // three Rain invocations (GadA, Gad2 B1/B2) + GadM's S-box layer + MAYO.
     // (Kept for symmetry with the Keccak branch; nothing sizes off this in
     // the RAINHASH build -- OWF_NUM_CONSTRAINTS below is what matters.)
     constexpr static std::size_t OWF_ENC_SBOXES =
         3 * VOLERAINHASH_NUM_ROUNDS +
         NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BOXES + VOLEMAYO_M<S>;
-    #endif
 
     constexpr static std::size_t OWF_ENC_CONSTRAINTS =
         detail::compute_owf_num_enc_constraints<S, O>();
@@ -202,28 +185,10 @@ struct OWF_CONSTANTS
     constexpr static std::size_t OWF_ENC_WITNESS_BITS = OWF_BLOCKS * OWF_ENC_WITNESS_BITS_PER_BLOCK;
 
     constexpr static std::size_t OWF_NUM_CONSTRAINTS = detail::compute_owf_num_constraints<S, O>();
-    #if defined WITH_KECCAK
-    constexpr static std::size_t WITNESS_BITS = VOLEMAYO_WITNESS_SIZE_BITS<S> + VOLEKECCAK_WITNESS_SIZE_BITS<S>;
-    #endif
-    #if defined WITH_RAINHASH
     constexpr static std::size_t WITNESS_BITS = VOLEMAYO_WITNESS_SIZE_BITS<S> + VOLERAINHASH_WITNESS_SIZE_BITS<S>;
-    #endif
 
-    #if defined WITH_KECCAK
-        #if defined KECCAK_DEG_16
-            constexpr static std::size_t QS_DEGREE = 16;
-        #else
-            constexpr static std::size_t QS_DEGREE = 2;
-        #endif
-    #endif
 
-    #if defined WITH_RAINHASH
-        #if defined RAINHASH_INV_NORM
-            constexpr static std::size_t QS_DEGREE = 3;
-        #else
             constexpr static std::size_t QS_DEGREE = 2;
-        #endif
-    #endif
 
     using block_t = block_secpar<S>;
 };

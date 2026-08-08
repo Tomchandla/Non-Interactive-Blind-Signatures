@@ -10,7 +10,7 @@ INC_PLATFORM = src/generic
 # Source files
 SOURCE_FILES_COMMON_SYS = $(MAYOCPATH)/common/randombytes_system.c $(MAYOCPATH)/common/aes_c.c $(MAYOCPATH)/common/aes128ctr.c $(MAYOCPATH)/common/aes_neon.c $(MAYOCPATH)/common/fips202.c $(MAYOCPATH)/common/mem.c
 SOURCE_FILES_MAYO = $(MAYOCPATH)/params.c $(MAYOCPATH)/arithmetic.c mayo_rain.c
-HEADER_FILES_FOLDERS = -I$(MAYOCPATH)/../include -I$(MAYOCPATH)/common -I$(MAYOCPATH) -I$(MAYOCPATH)/generic -I.../mayo-c-sys -I../vole/conservative_bs
+HEADER_FILES_FOLDERS = -I$(MAYOCPATH)/../include -I$(MAYOCPATH)/common -I$(MAYOCPATH) -I$(MAYOCPATH)/generic -I../vole/conservative_bs
 
 update_submodules:
 	git submodule update --init ../MAYO-C

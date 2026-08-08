@@ -94,10 +94,8 @@ struct quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>
     static quicksilver_gfsecpar<quicksilver, deg>
     combine_8_bits(const quicksilver_gf2<quicksilver, deg>* qs_bits);
 
-    #if defined WITH_RAINHASH
     static quicksilver_gfsecpar<quicksilver, deg>
     combine_128_bits(const quicksilver_gf2<quicksilver, deg>* qs_bits);
-    #endif
 
     static quicksilver_gfsecpar<quicksilver, deg>
     combine_4_bits(const quicksilver_gf2<quicksilver, deg>* qs_bits);
@@ -246,10 +244,8 @@ struct quicksilver_gfsecpar<quicksilver_state<S, true, max_deg>, deg>
     static quicksilver_gfsecpar<quicksilver, deg>
     combine_8_bits(const quicksilver_gf2<quicksilver, deg>* qs_bits);
 
-    #if defined WITH_RAINHASH
     static quicksilver_gfsecpar<quicksilver, deg>
     combine_128_bits(const quicksilver_gf2<quicksilver, deg>* qs_bits);
-    #endif
 
     static quicksilver_gfsecpar<quicksilver, deg>
     combine_4_bits(const quicksilver_gf2<quicksilver, deg>* qs_bits);
@@ -538,7 +534,6 @@ public:
         return qs_bits;
     }
 
-    #if defined WITH_RAINHASH
     // load 128 consecutive bits from the witness
     inline std::array<quicksilver_gf2<quicksilver_state>, 128>
     load_witness_128_bits(size_t bit_index) const
@@ -548,7 +543,6 @@ public:
             qs_bits[bit_j] = get_witness_bit(bit_index + bit_j);
         return qs_bits;
     }
-    #endif
 
     // The 4 bit thingy
     // load 4 consecutive bits from the witness
@@ -581,7 +575,6 @@ public:
         return quicksilver_gfsecpar<quicksilver_state>::combine_8_bits(input_bits.data());
     }
 
-    #if defined WITH_RAINHASH
     // load 128 consecutive bits from the witness and combine them into a GF(2^secpar) value in the
     // GF(2^8) subfield
     inline quicksilver_gfsecpar<quicksilver_state>
@@ -590,7 +583,6 @@ public:
         auto input_bits = load_witness_128_bits(bit_index);
         return quicksilver_gfsecpar<quicksilver_state>::combine_128_bits(input_bits.data());
     }
-    #endif
 
     // the 4 bit thingy
     // load 4 consecutive bits from the witness and combine them into a GF(2^secpar) value in the
@@ -874,7 +866,6 @@ operator*(const quicksilver_gf2<QS, deg_a>& a, const quicksilver_gf2<QS, deg_b>&
     return out;
 }
 
-#if defined WITH_RAINHASH
 template <typename QS, size_t deg>
 inline quicksilver_gf2<QS, deg>
 AND_GF2_CONST(const quicksilver_gf2<QS, deg>& a, uint8_t bit)
@@ -902,7 +893,6 @@ AND_GF2_CONST(const quicksilver_gf2<QS, deg>& a, uint8_t bit)
     }
     return out;
 }
-#endif
 
 template <typename QS, size_t deg_a, size_t deg_b>
 inline quicksilver_gfsecpar<QS, deg_a + deg_b>
@@ -969,7 +959,6 @@ quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>::combine_8_bits(
     return out;
 }
 
-#if defined WITH_RAINHASH
 // NEW
 // The 128 bits lifting (prover)
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)
@@ -994,7 +983,6 @@ quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>::combine_128_bit
 
     return out;
 }
-#endif
 
 // The 4 bits lifting (prover)
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)
@@ -1058,7 +1046,6 @@ quicksilver_gfsecpar<quicksilver_state<S, true, max_deg>, deg>::combine_8_bits(
     return out;
 }
 
-#if defined WITH_RAINHASH
 // NEW
 // The 128 bits lifting (verifier)
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)
@@ -1075,7 +1062,6 @@ quicksilver_gfsecpar<quicksilver_state<S, true, max_deg>, deg>::combine_128_bits
 
     return out;
 }
-#endif
 
 // The 4 bits lifting (verifier)
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)

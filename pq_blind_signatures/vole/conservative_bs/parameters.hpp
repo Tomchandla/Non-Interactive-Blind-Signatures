@@ -6,9 +6,7 @@
 #include <utility>
 #include <array>
 
-#if defined WITH_RAINHASH
 #include "lowmc_plain/lowmc_params.hpp"
-#endif
 
 #define DEBUG_MODE 1
 
@@ -158,12 +156,8 @@ constexpr std::size_t VOLEMAYO_T_ELEM_SIZE = VOLEMAYO_M<S>;
 template <secpar S>
 constexpr std::size_t VOLEMAYO_E_SIZE_BYTES = (VOLEMAYO_M<S> * VOLEMAYO_M<S>) / VOLEMAYO_FIELD_IN_UINT8;
 template <secpar S>
-#if defined WITH_RAINHASH
 // the public message m = LowMC_K(r) is one LowMC block = lambda bits
 constexpr std::size_t HASHED_MSG_SIZE_BITS = secpar_to_bits(S);
-#else
-constexpr std::size_t HASHED_MSG_SIZE_BITS = secpar_to_bits(S);
-#endif
 template <secpar S>
 constexpr std::size_t CPK_SIZE_BITS = secpar_to_bits(S);
 template <secpar S>
@@ -187,68 +181,7 @@ template <secpar S>
 constexpr std::size_t VOLEMAYO_SECRET_SIZE_BYTES = VOLEMAYO_PUBLIC_SIZE_BYTES<S> + VOLEMAYO_S_BYTES<S>;
 
 
-#if defined WITH_KECCAK
-// ############# KECCAK PARAMTERS ##############
-constexpr std::size_t VOLEKECCAK_W = 64;
-constexpr uint8_t VOLEKECCAK_PADDING_D = 31;
-constexpr uint8_t VOLEKECCAK_PADDING_0X80 = 128;
-constexpr std::size_t VOLEKECCAK_B = 1600;
-constexpr std::size_t VOLEKECCAK_NUM_ROUNDS = 24;
-constexpr std::size_t VOLEKECCAK_RATE = 1088;
-constexpr std::size_t VOLEKECCAK_RATE_BYTES = (VOLEKECCAK_RATE+7)/8;
-constexpr std::size_t VOLEKECCAK_CAPACITY = VOLEKECCAK_B - VOLEKECCAK_RATE; // 512 bits
-// constexpr std::size_t VOLEKECCAK_PK_OUTPUT_BYTES = (VOLEKECCAK_RATE + 7)/8;
-constexpr std::size_t VOLEKECCAK_PK_OUTPUT_BYTES = 0; // output of keccak is still private for the mayo part
-constexpr std::size_t VOLEKECCAK_PUBLIC_SIZE_BYTES = VOLEKECCAK_PK_OUTPUT_BYTES;  // pk output
 
-#if defined KECCAK_DEG_16
-// 4 rounds forward, 2 rounds backward, contains intermediate witness and the output
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_WITNESS_SIZE_BITS = RAND_SIZE_BITS<S> + (VOLEKECCAK_B*((VOLEKECCAK_NUM_ROUNDS/6)-1) + VOLEKECCAK_B)
-                                                + VOLEKECCAK_B + (VOLEKECCAK_B*((VOLEKECCAK_NUM_ROUNDS/6)-1) + VOLEKECCAK_B); 
-                                                // ^^^^^^^
-                                                // This one is the M_digest and the signature salt  
-#else
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_WITNESS_SIZE_BITS = RAND_SIZE_BITS<S> + (VOLEKECCAK_B*(VOLEKECCAK_NUM_ROUNDS-1) + VOLEKECCAK_B)
-                                                + VOLEKECCAK_B + (VOLEKECCAK_B*(VOLEKECCAK_NUM_ROUNDS-1) + VOLEKECCAK_B);  // the output is never revealed
-                                                // ^^^^^^^
-                                                // This one is the M_digest and the signature salt 
-#endif
-constexpr std::size_t VOLEKECCAK_B_BYTES = (VOLEKECCAK_B + 7)/8;
-
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_WITNESS_SIZE_BYTES = (VOLEKECCAK_WITNESS_SIZE_BITS<S> + 7)/8;
-
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_SECRET_SIZE_BYTES = VOLEKECCAK_PUBLIC_SIZE_BYTES + VOLEKECCAK_WITNESS_SIZE_BYTES<S>; 
-// SHA3-256 L1
-constexpr std::size_t VOLEKECCAK_OUTPUT_LEN_BITS_L1 = 256;  // Digest_bytes = 32 bytes
-constexpr std::size_t VOLEKECCAK_COMMIT_MU_SIZE_BYTES_L1 = 16;
-// SHA3-384 L3
-constexpr std::size_t VOLEKECCAK_OUTPUT_LEN_BITS_L3 = 384;  // Digest_bytes = 48 bytes
-constexpr std::size_t VOLEKECCAK_COMMIT_MU_SIZE_BYTES_L3 = 24;
-// SHA3-512 L5
-constexpr std::size_t VOLEKECCAK_OUTPUT_LEN_BITS_L5 = 512;  // Digest_bytes = 64 bytes
-constexpr std::size_t VOLEKECCAK_COMMIT_MU_SIZE_BYTES_L5 = 32;
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_OUTPUT_LEN_BITS = (secpar_to_bytes(S) == 16 ? VOLEKECCAK_OUTPUT_LEN_BITS_L1 : 
-                                                    (secpar_to_bytes(S) == 24 ? VOLEKECCAK_OUTPUT_LEN_BITS_L3 : VOLEKECCAK_OUTPUT_LEN_BITS_L5));
-// NOTE: This is the output len that is actually used further in the protocol, rest from the rate we just ignore, but used in the proof
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_OUTPUT_LEN_BYTES = (VOLEKECCAK_OUTPUT_LEN_BITS<S> + 7)/8;
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_COMMIT_MU_SIZE_BYTES = (secpar_to_bytes(S) == 16 ? VOLEKECCAK_COMMIT_MU_SIZE_BYTES_L1 : 
-                                                        (secpar_to_bytes(S) == 24 ? VOLEKECCAK_COMMIT_MU_SIZE_BYTES_L3 : VOLEKECCAK_COMMIT_MU_SIZE_BYTES_L5));
-
-template <secpar S>                                                
-// constexpr std::size_t VOLEKECCAK_COMMITMENT_INPUT_BYTES = CPK_SIZE_BYTES<S> + HASHED_MSG_SIZE_BYTES<S> + RAND_SIZE_BYTES<S>;
-constexpr std::size_t VOLEKECCAK_COMMITMENT_INPUT_BYTES = HASHED_MSG_SIZE_BYTES<S> + RAND_SIZE_BYTES<S>;
-template <secpar S>
-constexpr std::size_t VOLEKECCAK_MAYO_HASH_INPUT_BYTES =  VOLEMAYO_DIGEST_BYTES<S> + VOLEMAYO_SALT_BYTES<S>;
-#endif
-
-#if defined WITH_RAINHASH
 constexpr std::size_t VOLERAINHASH_ONE_ROUND_RC_SIZE_BYTES = 64;
 constexpr std::size_t VOLERAINHASH_RC_SIZE_BITS = 64*7 * 8;
 constexpr std::size_t VOLERAINHASH_MAT_SIZE_BITS = 64*512*7 * 8;
@@ -304,7 +237,6 @@ template <secpar S>
 constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BYTES = (VOLERAINHASH_OUTPUT_LEN_BITS<S> + 7)/8;
 template <secpar S>
 constexpr std::size_t VOLERAINHASH_COMMIT_MU_SIZE_BYTES = 16;
-#endif
 
 
 
@@ -312,12 +244,7 @@ namespace
 {
 constexpr unsigned int owf_algo_ecb = 0;
 constexpr unsigned int owf_algo_em = 2;
-#if defined WITH_KECCAK
-constexpr unsigned int owf_algo_keccak_then_mayo = 4;
-#endif
-#if defined WITH_RAINHASH
 constexpr unsigned int owf_algo_rainhash_then_mayo = 4;
-#endif
 constexpr unsigned int owf_algo_shift = 8;
 constexpr unsigned int owf_flag_zero_sboxes = 0b0001;
 constexpr unsigned int owf_flag_norm_proof = 0b0010;
@@ -328,29 +255,7 @@ constexpr unsigned int owf_flag_ctr_input = 0b1000;
 // Enum of the supported one-way functions
 enum class owf : unsigned int
 {
-    #if defined WITH_KECCAK
-    aes_ecb = owf_algo_ecb << owf_algo_shift,
-    aes_em = owf_algo_em << owf_algo_shift,
-    keccak_then_mayo = owf_algo_keccak_then_mayo << owf_algo_shift,
 
-    aes_ecb_with_zero_sboxes = aes_ecb | owf_flag_zero_sboxes,
-    aes_em_with_zero_sboxes = aes_em | owf_flag_zero_sboxes,
-    keccak_then_mayo_with_zero_sboxes = keccak_then_mayo | owf_flag_zero_sboxes,
-
-    aes_ecb_with_zero_sboxes_and_norm_proof = aes_ecb_with_zero_sboxes | owf_flag_norm_proof,
-    aes_em_with_zero_sboxes_and_norm_proof = aes_em_with_zero_sboxes | owf_flag_norm_proof,
-    keccak_then_mayo_with_zero_sboxes_and_norm_proof = keccak_then_mayo_with_zero_sboxes | owf_flag_norm_proof,
-
-    v1 = aes_ecb,
-    v1_em = aes_em,
-    v1_keccak_then_mayo = keccak_then_mayo,
-    v2 = aes_ecb | owf_flag_zero_sboxes | owf_flag_norm_proof | owf_flag_shrunk_keyspace |
-         owf_flag_ctr_input,
-    v2_em = aes_em | owf_flag_zero_sboxes | owf_flag_norm_proof | owf_flag_shrunk_keyspace,
-    v2_keccak_then_mayo = keccak_then_mayo,
-    #endif
-
-    #if defined WITH_RAINHASH
     aes_ecb = owf_algo_ecb << owf_algo_shift,
     aes_em = owf_algo_em << owf_algo_shift,
     rainhash_then_mayo = owf_algo_rainhash_then_mayo << owf_algo_shift,
@@ -370,7 +275,6 @@ enum class owf : unsigned int
          owf_flag_ctr_input,
     v2_em = aes_em | owf_flag_zero_sboxes | owf_flag_norm_proof | owf_flag_shrunk_keyspace,
     v2_rainhash_then_mayo = rainhash_then_mayo,
-    #endif
 };
 
 constexpr bool is_owf_with_aes_ecb(owf o)
@@ -383,19 +287,11 @@ constexpr bool is_owf_with_aes_em(owf o)
     return (std::to_underlying(o) >> owf_algo_shift) == owf_algo_em;
 }
 
-#if defined WITH_KECCAK
-constexpr bool is_owf_with_keccak_then_mayo(owf o)
-{
-    return (std::to_underlying(o) >> owf_algo_shift) == owf_algo_keccak_then_mayo;
-}
-#endif
 
-#if defined WITH_RAINHASH
 constexpr bool is_owf_with_rainhash_then_mayo(owf o)
 {
     return (std::to_underlying(o) >> owf_algo_shift) == owf_algo_rainhash_then_mayo;
 }
-#endif
 
 constexpr bool is_owf_with_zero_sboxes(owf o)
 {
@@ -582,23 +478,13 @@ struct parameter_set
 namespace v1
 {
 
-#if defined WITH_KECCAK
-using keccak_then_mayo_128_s = parameter_set<secpar::s128, 9, owf::v1_keccak_then_mayo, prg::aes_ctr>;
-using keccak_then_mayo_128_f = parameter_set<secpar::s128, 16, owf::v1_keccak_then_mayo, prg::aes_ctr>;
-using keccak_then_mayo_192_s = parameter_set<secpar::s192, 14, owf::v1_keccak_then_mayo, prg::aes_ctr>;
-using keccak_then_mayo_192_f = parameter_set<secpar::s192, 24, owf::v1_keccak_then_mayo, prg::aes_ctr>;
-using keccak_then_mayo_256_s = parameter_set<secpar::s256, 20, owf::v1_keccak_then_mayo, prg::aes_ctr>;
-using keccak_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v1_keccak_then_mayo, prg::aes_ctr>;
-#endif
 
-#if defined WITH_RAINHASH
 using rainhash_then_mayo_128_s = parameter_set<secpar::s128, 9, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
 using rainhash_then_mayo_128_f = parameter_set<secpar::s128, 16, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
 using rainhash_then_mayo_192_s = parameter_set<secpar::s192, 14, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
 using rainhash_then_mayo_192_f = parameter_set<secpar::s192, 24, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
 using rainhash_then_mayo_256_s = parameter_set<secpar::s256, 20, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
 using rainhash_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
-#endif
     
 } // namespace v1
 
@@ -608,22 +494,7 @@ namespace v2
     // Also seemed like a decent tradeoff:
     // using faest_128_s = parameter_set<secpar::s128, 10, owf::v2, prg::aes_ctr, prg::aes_ctr, leaf_hash::aes_ctr_stat_bind, 12, {bavc::one_tree, 105}>;
 
-#if defined WITH_KECCAK
-using keccak_then_mayo_128_s = parameter_set<secpar::s128, 11, owf::v2_keccak_then_mayo, prg::aes_ctr, prg::aes_ctr,
-                                    leaf_hash::aes_ctr_stat_bind, 7, {bavc::one_tree, 102}>;
-using keccak_then_mayo_128_f = parameter_set<secpar::s128, 16, owf::v2_keccak_then_mayo, prg::aes_ctr, prg::aes_ctr,
-                                    leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 110}>;
-using keccak_then_mayo_192_s = parameter_set<secpar::s192, 16, owf::v2_keccak_then_mayo, prg::aes_ctr, prg::aes_ctr,
-                                    leaf_hash::aes_ctr_stat_bind, 12, {bavc::one_tree, 162}>;
-using keccak_then_mayo_192_f = parameter_set<secpar::s192, 24, owf::v2_keccak_then_mayo, prg::aes_ctr, prg::aes_ctr,
-                                    leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 163}>;
-using keccak_then_mayo_256_s = parameter_set<secpar::s256, 22, owf::v2_keccak_then_mayo, prg::aes_ctr, prg::aes_ctr,
-                                    leaf_hash::aes_ctr_stat_bind, 6, {bavc::one_tree, 245}>;
-using keccak_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v2_keccak_then_mayo, prg::aes_ctr, prg::aes_ctr,
-                                    leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 246}>;
-#endif
 
-#if defined WITH_RAINHASH
 using rainhash_then_mayo_128_s = parameter_set<secpar::s128, 11, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 7, {bavc::one_tree, 102}>;
 using rainhash_then_mayo_128_f = parameter_set<secpar::s128, 16, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
@@ -636,23 +507,14 @@ using rainhash_then_mayo_256_s = parameter_set<secpar::s256, 22, owf::v2_rainhas
                                     leaf_hash::aes_ctr_stat_bind, 6, {bavc::one_tree, 245}>;
 using rainhash_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 246}>;
-#endif
                  
 } // namespace v2
 
-#if defined WITH_KECCAK
-// Macro listing all instances, useful to instantiate tests with all parameter sets
-#define ALL_FAEST_V2_INSTANCES                                                                     \
-    v2::keccak_then_mayo_128_s,                 \
-    v2::keccak_then_mayo_128_f, v2::keccak_then_mayo_192_s, v2::keccak_then_mayo_192_f, v2::keccak_then_mayo_256_s, v2::keccak_then_mayo_256_f
-#endif
 
-#if defined WITH_RAINHASH
 // Macro listing all instances, useful to instantiate tests with all parameter sets
 #define ALL_FAEST_V2_INSTANCES                                                                     \
     v2::rainhash_then_mayo_128_s,                 \
     v2::rainhash_then_mayo_128_f, v2::rainhash_then_mayo_192_s, v2::rainhash_then_mayo_192_f, v2::rainhash_then_mayo_256_s, v2::rainhash_then_mayo_256_f
-#endif
 
 #define ALL_FAEST_INSTANCES ALL_FAEST_V2_INSTANCES
 

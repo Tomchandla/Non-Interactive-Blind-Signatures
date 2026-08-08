@@ -17,8 +17,6 @@ cp "$TEST_MESON_SOURCE_FILE" "$TEST_MESON_DESTINATION"
 PARAMETERS_SOURCE_FILE="conservative_bs/parameters.hpp"
 PARAMETERS_DESTINATION="faest-cpp-tmp/parameters.hpp"
 cp "$PARAMETERS_SOURCE_FILE" "$PARAMETERS_DESTINATION"
-sed -i '1i#define PLUS_MAYO' "$PARAMETERS_DESTINATION"
-sed -i '1i#define WITH_RAINHASH' "$PARAMETERS_DESTINATION"
 
 # CONSTANTS.HPP
 CONSTANTS_SOURCE_FILE="conservative_bs/constants.hpp"
@@ -77,16 +75,6 @@ TEST_VOLEMAYO_SOURCE_FILE="conservative_bs/test/test_voleconsv_bs.cpp"
 TEST_VOLEMAYO_DESTINATION="faest-cpp-tmp/test/test_voleconsv_bs.cpp"
 cp "$TEST_VOLEMAYO_SOURCE_FILE" "$TEST_VOLEMAYO_DESTINATION"
 
-# NOTE: We don't really need the fips files, just keeping it here to have a common meson.build file for both conservative_bs and keccak version
-# FIPS202.H
-FIPS202H_SOURCE_FILE="common/fips202.h"
-FIPS202H_DESTINATION="faest-cpp-tmp/test/fips202.h"
-cp "$FIPS202H_SOURCE_FILE" "$FIPS202H_DESTINATION"
-# NOTE: We don't really need the fips files, just keeping it here to have a common meson.build file for both conservative_bs and keccak version
-# FIPS202.C
-FIPS202C_SOURCE_FILE="common/fips202.c"
-FIPS202C_DESTINATION="faest-cpp-tmp/test/fips202.c"
-cp "$FIPS202C_SOURCE_FILE" "$FIPS202C_DESTINATION"
 
 # OWF_PROOF_TOOLS.HPP
 OWF_PROOF_TOOLS_SOURCE_FILE="conservative_bs/owf_proof_tools.hpp"

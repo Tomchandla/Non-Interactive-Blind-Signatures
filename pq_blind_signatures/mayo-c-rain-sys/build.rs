@@ -35,7 +35,6 @@ fn main() {
         .clang_arg("-I../MAYO-C/src/generic")
         .clang_arg("-I../MAYO-C/src/AVX2")
         .clang_arg("-I../MAYO-C/src/neon")
-        .clang_arg("-I../mayo-c-sys")
         .clang_arg("-DENABLE_PARAMS_DYNAMIC=ON")
         .clang_arg("-DMAYO_BUILD_TYPE_REF")
         .generate_inline_functions(true)

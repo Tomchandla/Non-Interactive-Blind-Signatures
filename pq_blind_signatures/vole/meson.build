@@ -38,7 +38,6 @@ faest_sources = [
   'polynomials_constants.cpp',
   'sha3/KeccakHashtimes4.c',
   'sha3/KeccakSpongetimes4.c',
-  'test/fips202.c',                 # NOTE: Not needed for mayo, still keeping here just so we have one meson.build file
   'small_vole.cpp',
   'vector_com.cpp',
   'vole_commit.cpp',
