@@ -1,0 +1,26 @@
+┌──────────────────────────────────────────────────────────┐
+│ NIBS  LowMC + MAYO + RainHash + VOLEitH   [SV2_128]      │
+├──────────────────────────────────────────────────────────┤
+│ Phase                                  mean over 50 runs │
+│   keygen_signer                                 2.703 ms │
+│   keygen_recipient                              0.246 ms │
+│   issue                                         5.722 ms │
+│   obtain (prove)                               62.656 ms │
+│   verify                                       57.330 ms │
+│   lowmc setup (one-time, shared)               22.416 ms │
+├──────────────────────────────────────────────────────────┤
+│ Sizes                                                    │
+│   presignature |sigma_pre|         0.443 KB       454 B  │
+│   signature    |sigma|            28.270 KB     28948 B  │
+│   receiver key K                                   16 B │
+│   opening op                                       16 B │
+│   nonce r                                          16 B │
+│   receiver pk_R                                    32 B │
+│   message m                                        16 B │
+├──────────────────────────────────────────────────────────┤
+│ Instances                                                │
+│   GadM  LowMC(n=128, k=128, m=42, r=13, d=2^64)          │
+│   GadA  Rain(512, 7r), 1 block:  c = H(op | K)           │
+│   Gad2  Rain(512, 7r), 2 blocks: t = H(c | r | salt)     │
+│   witness 15744 bits (1968 B), 1960 constraints          │
+└──────────────────────────────────────────────────────────┘
