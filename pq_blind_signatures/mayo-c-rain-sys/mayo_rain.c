@@ -127,11 +127,8 @@ int mayo_rain_sign_signature_fixed_length_input(const mayo_params_t *p, unsigned
     memcpy(tmp + NIBS_MSG_BYTES, salt, param_salt_bytes);
     ctrbyte = tmp + NIBS_MSG_BYTES + param_salt_bytes + param_sk_seed_bytes;
 
-    // --- This is the only part where we replace shake with rain ---
-    // t = Rain2( pkR || nonce || salt || 0xff-pad ), two blocks
+    // This is the only part where we replace shake with rain
     nibs_rain2_target(tenc, param_m_bytes, m, salt, param_salt_bytes);
-    // ---
-
     decode(tenc, t, param_m); // may not be necessary
 
     for (int ctr = 0; ctr <= 255; ++ctr) {
