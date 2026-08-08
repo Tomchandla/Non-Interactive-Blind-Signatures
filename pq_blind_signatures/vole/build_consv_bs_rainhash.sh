@@ -117,11 +117,14 @@ cp -r "$LOWMC_PLAIN_DIR" "faest-cpp-tmp"
 cp "conservative_bs/parameters_lowmc.hpp" "faest-cpp-tmp/parameters_lowmc.hpp"
 cp "conservative_bs/owf_proof_lowmc.inc" "faest-cpp-tmp/owf_proof_lowmc.inc"
 
-# compiling faest-cpp-tmp with the new added meson.build
 export SHAREDLIBNAME="consv_bs_rainhash"
 export ARFLAGS=rcs
 cd faest-cpp-tmp
-# meson setup build_debug --buildtype=debug
-meson setup build_debug --buildtype=release
-cd build_debug
-meson compile
+
+if [ -d build_debug ]; then
+  meson setup --reconfigure build_debug --buildtype=release
+else
+  meson setup build_debug --buildtype=release
+fi
+
+ninja -C build_debug
