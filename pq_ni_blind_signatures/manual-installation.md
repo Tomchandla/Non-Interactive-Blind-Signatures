@@ -1,45 +1,55 @@
 # Manual installation
 
-In this small guide, we show the individual steps to download all required dependencies to run our codeon a completely fresh installation of Ubuntu 24.04 on WSL.
+Step-by-step setup on a clean Ubuntu 24.04 install under WSL2. The build layout follows the reference implementation of [BBBMR26](https://github.com/shibammukherjee/pq_blind_signatures); versions in brackets are what we installed and tested against.
 
 1. **Update the system**
-* `sudo apt get update`
-* `apt upgrade`
+   * `sudo apt update`
+   * `sudo apt upgrade`
 
-2. **Download git and clone the repository**
-> **Note:** We do it here with the GitHub version, but our README also has a short explanation explaining the challenges that might arise when doing it with the zip folder.
+2. **Install git and clone**
+   * `sudo apt install git`
+   * `git clone --recurse-submodules <fill: your repository URL>`
 
-* `sudo apt-get install git-all`
-* `git clone https://github.com/shibammukherjee/pq_blind_signatures.git`
+   Cloning with submodules matters: MAYO-C is pulled in that way, and a missing
+   submodule shows up later as a CMake error rather than a clear message.
 
-3. **Download Rust**
-* `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` (rustc 1.93.0)
+3. **Install Rust** (rustc / cargo 1.96.1)
+   * `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
-4. **Direct download of dependencies**
-* `sudo apt install cmake` (cmake version 3.28.3)
-* `sudo apt install libclang-dev`
-* `sudo apt install gnuplot` (gnuplot 6.0 patchlevel 0)
-* `sudo apt install build-essential`
+4. **Install the remaining apt packages**
+   * `sudo apt install build-essential`
+   * `sudo apt install cmake` (3.28.3)
+   * `sudo apt install libclang-dev` (LLVM 18.1.3)
+   * `sudo apt install gnuplot` (6.0) — only needed for Criterion plots
 
-5. **Manual installation of meson and ninja via pipx**
-*Apt provides versions that are too old for these tools.*
-* `sudo apt install pipx` (1.4.3)
-* `pipx ensurepath`
-* `pipx install meson` (1.10.1)
-* `pipx install ninja` (1.13.0)
+5. **Install meson and ninja through pipx**
 
-6. **Download and set gcc-14 and g++-14 as default**
-*Manual download is required; note that changing default settings might cause issues in specific edge cases.*
-* `sudo apt install gcc-14 g++-14` (gcc-14 14.2.0 and g++-14 14.2.0)
-* `sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 110`
-* `sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 110`
+   The apt packages are too old for this build.
+   * `sudo apt install pipx` (1.4.3)
+   * `pipx ensurepath`
+   * `pipx install meson` (1.11.1)
+   * `pipx install ninja` (1.13.0)
 
-7. **Configure an SSH key**
-Required to retrieve submodules (e.g., MAYO and XKCP) from GitHub. Alternatively, clone repositories manually and remove the lines of code where the submodules are instantiated.
+6. **Select GCC 14**
 
-8. **Reproduce our Results**
-Now, you can run our code and for example reproduce our benchmarks by running 
-* `./bench.sh` (took roughly 15 minutes to finish in our trial)
+   The proof system compiles as C23/C++23, which GCC 13 — the default on 24.04 —
+   does not support. Install the newer compiler and make it the default:
+   * `sudo apt install gcc-14 g++-14`
+   * `sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 110`
+   * `sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 110`
 
-9. **View the Results**
-You can view your own benchmarking results in `bench_log.txt`.
+   We tested against 14.3.0. Changing the system default compiler can affect
+   unrelated builds on the same machine.
+
+7. **Raise the Rust stack limit**
+
+   MAYO's map evaluation overflows the default thread stack:
+   * `export RUST_MIN_STACK=8388608`
+
+8. **Build and benchmark**
+   * `<fill: build + bench commands>`
+   * `<fill: expected runtime>`
+
+9. **Read the results**
+
+   Benchmark output is written to `<fill: log file>`.
