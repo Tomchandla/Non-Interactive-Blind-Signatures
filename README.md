@@ -72,6 +72,18 @@ Running from a VS Code terminal is convenient, as it resolves the toolchain and 
 
 Instructions for setting up the build are below. If a build fails after changes to the circuit, note that rebuilding the C++ library alone does not propagate through the FFI: clean the FFI crate and the protocol crate as well before rebuilding. A step-by-step guide is in [`INSTALL.md`](INSTALL.md).
 
+### Testing
+
+To benchmark or test the results yourself, do the following ~/pq_ni_blind_signatures/ni-blind-signatures/ 
+
+```
+cd /pq_ni_blind_signatures/ni-blind-signatures/
+RUST_MIN_STACK=8388608 cargo test --test nibs_rain -- --nocapture
+RUST_MIN_STACK=8388608 cargo bench --bench ni_blind_sig_rain
+```
+
+More information for testing can be found in the README in ~/pq_ni_blind_signatures/ni-blind-signatures/. 
+
 ## Results
 
 Single core of an Intel i5-14400F under WSL2, means over 50 executions, single-threaded. One-time LowMC instance generation (22.9 ms) is excluded.
