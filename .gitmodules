@@ -1,3 +1,6 @@
 [submodule "pq_blind_signatures/MAYO-C"]
 	path = pq_blind_signatures/MAYO-C
 	url = https://github.com/PQCMayo/MAYO-C.git
+[submodule "pq_ni_blind_signatures/MAYO-C"]
+	path = pq_ni_blind_signatures/MAYO-C
+	url = https://github.com/PQCMayo/MAYO-C.git
