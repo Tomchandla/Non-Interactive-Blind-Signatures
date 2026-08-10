@@ -2,12 +2,12 @@
 │ NIBS  LowMC + MAYO + RainHash + VOLEitH   [SV1_128]      │
 ├──────────────────────────────────────────────────────────┤
 │ Phase                                  mean over 50 runs │
-│   keygen_signer                                 2.640 ms │
-│   keygen_recipient                              0.245 ms │
-│   issue                                         5.750 ms │
-│   obtain (prove)                              135.433 ms │
-│   verify                                      130.275 ms │
-│   lowmc setup (one-time, shared)               21.844 ms │
+│   keygen_signer                                 2.570 ms │
+│   keygen_recipient                              0.234 ms │
+│   issue                                         5.511 ms │
+│   obtain (prove)                              128.672 ms │
+│   verify                                      126.163 ms │
+│   lowmc setup (one-time, shared)               22.310 ms │
 ├──────────────────────────────────────────────────────────┤
 │ Sizes                                                    │
 │   presignature |sigma_pre|         0.443 KB       454 B  │
