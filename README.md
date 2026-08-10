@@ -70,7 +70,7 @@ Running from a VS Code terminal is convenient, as it resolves the toolchain and 
 
 ### Build
 
-Instructions for setting up the build are below. If a build fails after changes to the circuit, note that rebuilding the C++ library alone does not propagate through the FFI: clean the FFI crate and the protocol crate as well before rebuilding. A step-by-step guide is in [`INSTALL.md`](INSTALL.md).
+Instructions for setting up the build are below. If a build fails after changes to the circuit, note that rebuilding the C++ library alone does not propagate through the FFI: clean the FFI crate and the protocol crate as well before rebuilding. A step-by-step guide is in [`pq_ni_blind_signatures/manual-installation.md`](pq_ni_blind_signatures/manual-installation.md).
 
 ### Testing
 
