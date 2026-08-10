@@ -2,7 +2,6 @@
 // https://github.com/LowMC/lowmc
 //
 // Original work licensed under the MIT License.
-// Modifications for this project are Copyright (c) 2026 Thomas Chandler.
 
 #include "lowmc.hpp"
 
@@ -18,10 +17,10 @@ namespace {
 constexpr unsigned BLOCKSIZE = NIBS_LOWMC_BLOCK_BITS;
 constexpr unsigned BLOCKBYTES = NIBS_LOWMC_BLOCK_BYTES;
 using block    = std::bitset<BLOCKSIZE>;
-using keyblock = std::bitset<BLOCKSIZE>; // low `keysize` bits used
+using keyblock = std::bitset<BLOCKSIZE>;
 
-// --- PRG: self-shrinking 80-bit LFSR, process-global (reference-faithful) ---
-std::bitset<80> g_lfsr;      // zero-initialised => "not initialised yet"
+// PRG: self-shrinking 80-bit LFSR
+std::bitset<80> g_lfsr;
 
 bool getrandbit()
 {
@@ -212,6 +211,13 @@ const unsigned LowMCInst::Sbox[8] = {0x00, 0x01, 0x03, 0x06,
 
 LowMCInst* g_inst = nullptr;
 
+const LowMCInst& inst()
+{
+    nibs_lowmc_init();
+    assert(g_inst != nullptr && "LowMC instance failed to initialise");
+    return *g_inst;
+}
+
 block load_block(const uint8_t* bytes)
 {
     block b = 0;
@@ -244,15 +250,18 @@ unsigned nibs_lowmc_param_level(void) { return NIBS_LOWMC_LEVEL; }
 
 void nibs_lowmc_encrypt(const uint8_t* key, const uint8_t* pt, uint8_t* ct)
 {
-    block c = g_inst->encrypt(load_block(key), load_block(pt));
+    block c = inst().encrypt(load_block(key), load_block(pt));
     store_block(c, ct);
 }
 
 void nibs_lowmc_witness_states(const uint8_t* key, const uint8_t* pt,
                                uint8_t* states, uint8_t* ct)
 {
+    const LowMCInst& I = inst();
     std::vector<block> post;
-    block c = g_inst->encrypt(load_block(key), load_block(pt), &post);
+    block c = I.encrypt(load_block(key), load_block(pt), &post);
+    assert(post.size() == NIBS_LOWMC_ROUNDS &&
+           "post-S-box state count disagrees with NIBS_LOWMC_ROUNDS");
     for (unsigned r = 0; r < NIBS_LOWMC_ROUNDS; ++r)
         store_block(post[r], states + size_t(r) * BLOCKBYTES);
     if (ct) store_block(c, ct);
@@ -260,15 +269,21 @@ void nibs_lowmc_witness_states(const uint8_t* key, const uint8_t* pt,
 
 const uint8_t* nibs_lowmc_linmat(unsigned r)
 {
-    return &g_inst->lin_flat[size_t(r) * BLOCKSIZE * BLOCKBYTES];
+    const LowMCInst& I = inst();
+    assert(r < I.rounds && "linear-layer round index out of range");
+    return &I.lin_flat[size_t(r) * BLOCKSIZE * BLOCKBYTES];
 }
 const uint8_t* nibs_lowmc_keymat(unsigned r)
 {
-    return &g_inst->key_flat[size_t(r) * BLOCKSIZE * BLOCKBYTES];
+    const LowMCInst& I = inst();
+    assert(r <= I.rounds && "key-schedule round index out of range");
+    return &I.key_flat[size_t(r) * BLOCKSIZE * BLOCKBYTES];
 }
 const uint8_t* nibs_lowmc_roundconst(unsigned r)
 {
-    return &g_inst->rc_flat[size_t(r) * BLOCKBYTES];
+    const LowMCInst& I = inst();
+    assert(r < I.rounds && "round-constant index out of range");
+    return &I.rc_flat[size_t(r) * BLOCKBYTES];
 }
 
 void nibs_derive_message(const uint8_t* K, const uint8_t* r, uint8_t* m)
