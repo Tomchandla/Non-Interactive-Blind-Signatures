@@ -4,6 +4,15 @@
 
 This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) — itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) — with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. The implementation extends the interactive blind signature of Baum, Beckmann, Beullens, Mukherjee and Rechberger ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing in the interactive setting.
 
+> **Note on MAYO-C.** `pq_ni_blind_signatures/MAYO-C/` contains the unmodified
+> public reference implementation of MAYO
+> ([PQCMayo/MAYO-C](https://github.com/PQCMayo/MAYO-C)). It is included here as
+> ordinary source files rather than as a git submodule, because anonymisation
+> services strip submodule contents and leave an empty folder in their place,
+> which prevents the project from building. No submodule initialisation is
+> required — clone or download this repository and the MAYO sources are already
+> present. Nothing in that directory is specific to this work.
+
 **Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi, Goyal and Yadav ([BGY24](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
 
 ## Contributions
@@ -15,22 +24,28 @@ This project instantiates the generic non-interactive blind signature (NIBS) fra
 
 ```
 Non-Interactive-Blind-Signatures/
-└── pq_blind_signatures/
-    ├── blind-signatures-conservative-rain/   # NIBS protocol layer (Rust)
-    │   ├── src/                              # KeyGenS/R, Issue, Obtain, Verify
-    │   └── benches/                          # Criterion benchmarks
-    ├── mayo-c-sys/                           # FFI to MAYO-C
+└── pq_ni_blind_signatures/
+    ├── ni-blind-signatures/                  # NIBS protocol layer (Rust)
+    │   ├── src/
+    │   │   ├── ni_blind_sig_rain/            # KeyGenS/R, Issue, Obtain, Verify
+    │   │   ├── derive.rs                     # key and message derivation
+    │   │   └── zk.rs                         # witness assembly for the circuit
+    │   ├── tests/nibs_rain.rs                # integration tests
+    │   └── benches/ni_blind_sig_rain.rs      # Criterion benchmarks
     ├── mayo-c-rain-sys/                      # FFI to MAYO with RainHash internals
     ├── vole-rainhash-then-mayo-sys/          # FFI to the VOLEitH circuit
     ├── vole/                                 # C++ VOLEitH proof system (FAEST)
     │   ├── faest-cpp-tmp/                    # shared build folder
     │   ├── conservative_bs/                  # circuit definitions
-    │   │   └── owf_proof.inc 
-    |   ├── lowmc_plain/
-    |   |   └── lowmc.cpp               
+    │   │   └── owf_proof.inc
+    │   ├── lowmc_plain/
+    │   │   └── lowmc.cpp
     │   └── build_consv_bs_rainhash.sh
-    ├── MAYO-C/                               # git submodule (CMake)
-    └── bench_rainhash_bs.sh
+    ├── MAYO-C/                               # MAYO reference implementation (CMake)
+    ├── misc_stuff/
+    ├── Dockerfile
+    ├── manual-installation.md
+    └── bench_rainhash_nibs.sh
 ```
 
 The C and C++ components are built as shared libraries and reached from Rust through `bindgen`-generated foreign function interfaces; the protocol layer itself is Rust. All VOLEitH circuits share one build directory, so the crates cannot be built concurrently.
@@ -47,7 +62,7 @@ Developed and tested on Ubuntu 24.04.4 LTS under WSL2 (kernel 6.18.33.2). The ve
 | ninja | 1.13.0 | Install with `pipx` |
 | pipx | 1.4.3 | `sudo apt install pipx && pipx ensurepath` |
 | libclang | 18.1.3 | Required by `bindgen` for the Rust FFI |
-| cmake | 3.28.3 | Required to build the MAYO-C submodule (declares a 3.10 minimum) |
+| cmake | 3.28.3 | Required to build MAYO-C (declares a 3.10 minimum) |
 | gnuplot | 6.0 | Optional, for Criterion benchmark plots |
 | Python | 3.12.3 | |
 
@@ -59,10 +74,7 @@ Developed and tested on Ubuntu 24.04.4 LTS under WSL2 (kernel 6.18.33.2). The ve
 export LIBCLANG_PATH=/usr/lib/llvm-18/lib
 ```
 
-**Submodules.** MAYO-C is a git submodule and is built with CMake, so clone with `--recurse-submodules` (or run `git submodule update --init` afterwards). A missing submodule surfaces as a CMake error rather than an obvious "not initialised" message.
-
-**Stack size.** The MAYO map evaluation overflows Rust's default thread stack. Export
-`RUST_MIN_STACK=8388608` before running tests or benchmarks.
+**Stack size.** The MAYO map evaluation overflows Rust's default thread stack. Export `RUST_MIN_STACK=8388608` before running tests or benchmarks.
 
 **Reproducibility.** The C/C++ components compile with `-march=native -mtune=native`, so the resulting binaries are specific to the build machine.
 
@@ -74,15 +86,25 @@ Instructions for setting up the build are below. If a build fails after changes 
 
 ### Testing
 
-To benchmark or test the results yourself, do the following ~/pq_ni_blind_signatures/ni-blind-signatures/ 
+From the protocol crate directory:
 
 ```
-cd /pq_ni_blind_signatures/ni-blind-signatures/
+cd pq_ni_blind_signatures/ni-blind-signatures/
 RUST_MIN_STACK=8388608 cargo test --test nibs_rain -- --nocapture
 RUST_MIN_STACK=8388608 cargo bench --bench ni_blind_sig_rain
 ```
 
-More information for testing can be found in the README in ~/pq_ni_blind_signatures/ni-blind-signatures/. 
+`cargo test` runs the integration tests covering key derivation, presignature
+verification and the full round trip across all four parameter sets. `cargo bench`
+reproduces the timings in the Results table; Criterion writes HTML reports to
+`target/criterion/`.
+
+Because all VOLEitH circuits share one build directory, let each cargo invocation
+finish before starting the next. Interrupting a build can leave a `meson` or
+`ninja` process holding the build directory lock, which surfaces on the next run
+as `ERROR: Some other Meson process is already using this build directory`. If
+that happens, check for a stale process with `pgrep -a meson`, wait for it or
+terminate it, and re-run.
 
 ## Results
 
