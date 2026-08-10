@@ -12,7 +12,7 @@
 #include <stdalign.h>
 #include <mayo.c>
 #include <faest.h>
-
+#include "mayo_rain.h"
 #include <stdio.h>
 
 // pkR(32) || nonce(16).
