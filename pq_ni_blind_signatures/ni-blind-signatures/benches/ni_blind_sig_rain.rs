@@ -168,7 +168,7 @@ fn report(name: &str, t: &Timings, setup_ms: f64) -> String {
         ("receiver pk_R", PKR_BYTES),
         ("message m", MSG_BYTES),
     ] {
-        s.push_str(&format!("│   {:<28}{:>23} B │\n", label, bytes));
+        s.push_str(&format!("│   {:<28}{:>23} B  │\n", label, bytes));
     }
 
     s.push_str(&format!("├{rule}┤\n"));
