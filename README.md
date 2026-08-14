@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) — itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) — with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. The implementation extends the interactive blind signature of Baum, Beckmann, Beullens, Mukherjee and Rechberger ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing in the interactive setting.
+This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) (itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077))) with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. The implementation extends the interactive blind signature of Baum et al. ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing with Rainhash in the interactive setting.
 
 > **Note on MAYO-C.** `pq_ni_blind_signatures/MAYO-C/` contains the unmodified
 > public reference implementation of MAYO
@@ -13,12 +13,11 @@ This project instantiates the generic non-interactive blind signature (NIBS) fra
 > required — clone or download this repository and the MAYO sources are already
 > present. Nothing in that directory is specific to this work.
 
-**Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi, Goyal and Yadav ([BGY24](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
+**Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi et al. ([BGY24](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
 
 ## Contributions
 
-1. **An efficient post-quantum NIBS instantiation.** Signatures of **23.69 KB** at `SV1_128`, a >12× reduction over the state-of-the-art lattice NIBS, under UOV/WMQ and LowMC assumptions rather than lattice assumptions.
-2. **A simplified generic framework.** The framework of [BCGY24] requires a signature scheme, a NIZKPoK, a PRF *and* a commitment scheme. We show the PRF and the commitment can be collapsed into a single **strong pseudorandom permutation** (sPRP), with proof sketches for one-more unforgeability, strong receiver blindness and strong nonce blindness.
+**An efficient post-quantum NIBS instantiation.** Signatures of **23.69 KB** at `SV1_128`, a >12× reduction over the state-of-the-art lattice NIBS, under UOV/WMQ and LowMC assumptions rather than lattice assumptions.
 
 ## Project Structure
 
@@ -76,8 +75,6 @@ export LIBCLANG_PATH=/usr/lib/llvm-18/lib
 
 **Stack size.** The MAYO map evaluation overflows Rust's default thread stack. Export `RUST_MIN_STACK=8388608` before running tests or benchmarks.
 
-**Reproducibility.** The C/C++ components compile with `-march=native -mtune=native`, so the resulting binaries are specific to the build machine.
-
 Running from a VS Code terminal is convenient, as it resolves the toolchain and environment variables automatically.
 
 ### Build
@@ -94,21 +91,13 @@ RUST_MIN_STACK=8388608 cargo test --test nibs_rain -- --nocapture
 RUST_MIN_STACK=8388608 cargo bench --bench ni_blind_sig_rain
 ```
 
-`cargo test` runs the integration tests covering key derivation, presignature
-verification and the full round trip across all four parameter sets. `cargo bench`
-reproduces the timings in the Results table; Criterion writes HTML reports to
-`target/criterion/`.
+`cargo test` runs the integration tests covering key derivation, presignature verification and the full round trip across all four parameter sets. `cargo bench` reproduces the timings in the Results table; Criterion writes HTML reports to `target/criterion/`.
 
-Because all VOLEitH circuits share one build directory, let each cargo invocation
-finish before starting the next. Interrupting a build can leave a `meson` or
-`ninja` process holding the build directory lock, which surfaces on the next run
-as `ERROR: Some other Meson process is already using this build directory`. If
-that happens, check for a stale process with `pgrep -a meson`, wait for it or
-terminate it, and re-run.
+Because all VOLEitH circuits share one build directory, let each cargo invocation finish before starting the next. Interrupting a build can leave a `meson` or `ninja` process holding the build directory lock, which surfaces on the next run as `ERROR: Some other Meson process is already using this build directory`. If that happens, check for a stale process with `pgrep -a meson`, wait for it or terminate it, and re-run.
 
 ## Results
 
-Single core of an Intel i5-14400F under WSL2, means over 50 executions, single-threaded. One-time LowMC instance generation (22.9 ms) is excluded.
+Single core of an Intel i5-14400F under WSL2, means over 50 executions, single-threaded. One-time LowMC instance generation (22.9 ms) is excluded. The following results may not reflect what is in the benchmark output directory (due to more recent benchmarks for reproducibility) but was instead the first benchmarks' results.
 
 | Phase (ms) | SV1_128 | SV2_128 | FV1_128 | FV2_128 |
 |---|---|---|---|---|
