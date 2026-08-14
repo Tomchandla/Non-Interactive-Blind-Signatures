@@ -47,9 +47,9 @@ Step-by-step setup on a clean Ubuntu 24.04 install under WSL2. The build layout 
    * `export RUST_MIN_STACK=8388608`
 
 8. **Build and benchmark**
-   * `<fill: build + bench commands>`
-   * `<fill: expected runtime>`
+   * `cargo test`
+   * `cargo bench`
 
 9. **Read the results**
 
-   Benchmark output is written to `<fill: log file>`.
+   Benchmark output is written to `/ni-blind-signatures/bench_results/<RainhashVariant>.txt`.
