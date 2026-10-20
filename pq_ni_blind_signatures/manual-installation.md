@@ -8,10 +8,10 @@ Step-by-step setup on a clean Ubuntu 24.04 install under WSL2. The build layout 
 
 2. **Install git and clone**
    * `sudo apt install git`
-   * `git clone --recurse-submodules <fill: your repository URL>`
+   * `git clone <fill: your repository URL>`
 
-   Cloning with submodules matters: MAYO-C is pulled in that way, and a missing
-   submodule shows up later as a CMake error rather than a clear message.
+   MAYO-C is vendored as ordinary files in `pq_ni_blind_signatures/MAYO-C/`, so no
+   submodule initialisation is needed.
 
 3. **Install Rust** (rustc / cargo 1.96.1)
    * `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
@@ -46,10 +46,21 @@ Step-by-step setup on a clean Ubuntu 24.04 install under WSL2. The build layout 
    MAYO's map evaluation overflows the default thread stack:
    * `export RUST_MIN_STACK=8388608`
 
-8. **Build and benchmark**
-   * `<fill: build + bench commands>`
-   * `<fill: expected runtime>`
+8. **Build, test and benchmark**
+
+   The first cargo invocation builds the C++ proof system (meson/ninja), MAYO-C
+   (CMake) and the FFI crates. Afterwards:
+   * `cd pq_ni_blind_signatures/ni-blind-signatures`
+   * `export LIBCLANG_PATH=/usr/lib/llvm-18/lib` (if bindgen does not find libclang)
+   * `cargo test --release --test nibs --test sprp --test soundness`
+   * `cargo run --release --example sizes` — sizes of all 48 instances
+   * `cargo bench --bench nibs` — or `../bench_rainhash_nibs.sh`, which does both
+
+   Don't run two cargo builds at the same time. They share the meson build
+   directory, and a rebuild overwrites the shared libraries that a running
+   test has loaded.
 
 9. **Read the results**
 
-   Benchmark output is written to `<fill: log file>`.
+   Benchmark output is written to `ni-blind-signatures/bench_results/`:
+   `summary.md` / `summary.csv`, plus one `<variant>_<zk>.txt` box per instance.

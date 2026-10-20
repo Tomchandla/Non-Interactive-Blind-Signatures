@@ -1,0 +1,20 @@
+┌────────────────────────────────────────────────────────────┐
+│ NIBS BCGY+OMM SV1_192  (LowMC + MAYO + RainHash + VOLEitH) │
+├────────────────────────────────────────────────────────────┤
+│ Phase                               mean over 50 runs      │
+│   KeyGen_S                                      7.251 ms │
+│   KeyGen_R                                      0.269 ms │
+│   Issue                                        14.697 ms │
+│   Obtain (prove)                              169.601 ms │
+│   Verify                                      159.409 ms │
+├────────────────────────────────────────────────────────────┤
+│   presignature |sigma_pre|           0.634 KB       649 B │
+│   signature |sigma|                 38.377 KB     39298 B │
+│   receiver pk_R                      0.047 KB        48 B │
+│   message m                          0.023 KB        24 B │
+│   nonce r                            0.023 KB        24 B │
+├────────────────────────────────────────────────────────────┤
+│   witness 19016 bits = 13824 NIBS + 5192 MAYO s            │
+│   1 LowMC + 3 Rain gadgets (2 for the target), 2857 constraints │
+│   VOLEitH tau = 14                                         │
+└────────────────────────────────────────────────────────────┘

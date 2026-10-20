@@ -1,6 +1,6 @@
-# LowMC implmentation
+# LowMC implementation
 
-A deterministic, single-instance LowMC used as the strong pseudorandom permutation underlying the non-interactive blind-signature construction. Deterministic here refers to instance generation: the public matrices are regenerated from a fixed PRG so any verifier can reconstruct them from the parameter tuple alone. The keyed permutation is deterministic in the ordinary sense that every block cipher is — the pseudorandomness is over the choice of key. This directory contains the cleartext cipher only: it produces the ciphertext, the per-round witness states, and the public matrices that the VOLE-in-the-Head circuit consumes. It contains no proving or verification logic so that the circuit can be validated against an independent evaluation of the same cipher.
+LowMC instances for NIST levels 1, 3 and 5, used as the (strong) pseudorandom permutation underlying the non-interactive blind-signature construction. Instance generation is deterministic: the public matrices are regenerated from a fixed PRG so any verifier can reconstruct them from the parameter tuple alone. The keyed permutation is deterministic in the ordinary sense that every block cipher is — the pseudorandomness is over the choice of key. This directory contains the cleartext cipher only: it produces the ciphertext, the per-round witness states, and the public matrices that the VOLE-in-the-Head circuit consumes. It contains no proving or verification logic so that the circuit can be validated against an independent evaluation of the same cipher.
 
 ---
 
@@ -48,18 +48,38 @@ The security cost of the design is that the low algebraic degree that makes it c
 
 ### Role in the scheme
 
-LowMC is the strong pseudorandom permutation underlying the signature relation. The signer holds a key `K`; given a nonce `r`, the message is defined as `m = E_K(r)`, and the prover shows in zero knowledge that it knows a `K` consistent with the public `(r, m)` pair. The choice of LowMC over, say, AES is the AND count: under VOLE-in-the-Head the proof size scales with the number of AND gates, XOR gates are free for the same reason they are free under free-XOR, and a full encryption is exactly `3mr` ANDs.
+LowMC is the keyed permutation P_K of the NIBS constructions (n = k = λ):
+
+| Variant | Use of LowMC |
+| --- | --- |
+| BCGY (`BCGY+MAYO`, `BCGY+OMM`) | message m = LowMC_K(r); pk_R is a RainHash commitment to K |
+| sPRP (`sPRP+MAYO`, `sPRP+OMM`) | pk_R = LowMC_K(0‖c0) ‖ LowMC_K(0‖c1) and m = LowMC_K(1‖r), with c0 = 0, c1 = 1 and the domain bit in bit λ−1 |
+
+The VOLEitH prover shows in zero knowledge that it knows a K consistent with the public m (and, inside the witness, with pk_R and the presignature). LowMC is used instead of AES because of its AND count: a full encryption costs 3·m·r ANDs, and in VOLE-in-the-Head only the nonlinear part costs proof size. The gadget commits only the r post-S-box states (r·λ bits).
+
+### Instances
+
+| Level | n = k | S-boxes | identity bits | rounds | data complexity |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 128 | 42 | 2 | 13 | 2^64 |
+| 3 | 192 | 64 | 0 | 13 | 2^64 |
+| 5 | 256 | 85 | 1 | 13 | 2^64 |
+
+The round counts are the output of `determine_rounds.py` from the reference repository. All three instances are compiled in, and callers select one by NIST level.
+
+### sPRP and binding
+
+`encrypt` and `decrypt` are both implemented, so the forward and inverse oracles of the sPRP definition exist. `tests/sprp.rs` checks that E and D are mutually inverse at every level. The LowMC security claim is the standard single-key block-cipher claim, which is the (strong) PRP game, within the stated data complexity. The claim excludes related-key, known-key and chosen-key settings.
+
+Binding of pk_R to K is a chosen-key property, so the LowMC claim doesn't cover it. With pk_R = P_K(0‖s) for a free s it fails outright: pick any K′ and decrypt. The implemented derivation uses fixed inputs and 2λ output bits, so binding becomes collision resistance of K ↦ (P_K(0‖c0), P_K(0‖c1)). That property holds in the ideal-cipher model and is stated as a separate assumption. See [`docs/NOTES.md`](../../../docs/NOTES.md) §2.
 
 ### File map
 
 | File | Role |
 | --- | --- |
-| `../params_lowmc.hpp` | Scheme-level parameters. Selects the security level and defines the derived byte-length macros (`NIBS_LOWMC_KEY_BYTES`, `NIBS_LOWMC_NONCE_BYTES`, `NIBS_LOWMC_STATE_BYTES`, `NIBS_LOWMC_WITNESS_BYTES`) that fix the witness layout. |
-| `lowmc_parms.hpp` | The cipher instance itself: `NIBS_LOWMC_BLOCK_BITS`, `NIBS_LOWMC_KEY_BITS`, `NIBS_LOWMC_BOXES`, `NIBS_LOWMC_ROUNDS`, `NIBS_LOWMC_LEVEL`. Changing anything here changes the cipher; see *Determinism* below. |
-| `lowmc.hpp` | The C-ABI surface. Declares the `extern "C"` entry points so the prover and the circuit builder can link against this without pulling in C++ template machinery. |
-| `lowmc.cpp` | The implementation: PRG, instance generation, encryption, witness recording, and the flattened matrix exports. Derived from the reference implementation; see `Acknowledgements`. |
-
----
+| `lowmc_params.hpp` | The three instances (`nibs_lowmc::params<1/3/5>`) and derived sizes (`derived<LEVEL>`: identity bits, block and state bytes, AND count). Changing anything here changes the cipher. |
+| `lowmc.hpp` | `Inst<LEVEL>` (C++), and the C ABI: `nibs_lowmc_init`, `nibs_lowmc_block_bytes`, `nibs_lowmc_rounds`, `nibs_lowmc_encrypt`, `nibs_lowmc_decrypt`, `nibs_lowmc_witness_states`, plus the matrix and round-constant accessors that the circuit uses. |
+| `lowmc.cpp` | The implementation: Grain LFSR instance generation (freshly seeded per instance), encryption, decryption (inverse S-box and inverse linear layers), and witness recording. Derived from the reference implementation; see *Acknowledgements*. |
 
 ## Acknowledgements
 

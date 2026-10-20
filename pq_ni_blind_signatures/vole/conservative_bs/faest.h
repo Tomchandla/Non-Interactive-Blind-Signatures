@@ -1,444 +1,103 @@
 #ifndef FAEST_H
 #define FAEST_H
 
+// C interface of the NIBS VOLEitH library (libconsv_bs_rainhash).
+//
+// An instance is selected by
+//   variant : NIBS_VARIANT_*            (pk_R construction x MAYO mode)
+//   level   : 1, 3 or 5                 (NIST level; lambda = 128/192/256)
+//   speed   : 0 = "s" (small), 1 = "f" (fast)
+//   version : 1 or 2                    (FAEST v1 / v2 VOLEitH parameters)
+//
+// All byte strings use the sizes reported by nibs_instance_info_get.
+
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#if defined WITH_KECCAK
-    // ------ v1 ------
+enum
+{
+    // BCGY24 framework: pk_R = Rain(op || K), m = LowMC_K(r); MAYO with salt.
+    NIBS_VARIANT_BCGY_MAYO = 0,
+    // As above, but MAYO signs the Rain target directly (One-More-MAYO).
+    NIBS_VARIANT_BCGY_OMM = 1,
+    // sPRP framework: pk_R = LowMC_K(0||c0) || LowMC_K(0||c1),
+    // m = LowMC_K(1||r); MAYO with salt.
+    NIBS_VARIANT_SPRP_MAYO = 2,
+    // sPRP framework with One-More-MAYO.
+    NIBS_VARIANT_SPRP_OMM = 3,
+};
 
-    // getters for the parameters
-    void get_keccak_then_mayo128sv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo128fv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo192sv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo192fv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo256sv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo256fv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
+typedef struct
+{
+    size_t proof_bytes;       // |sigma|
+    size_t random_seed_bytes; // fresh randomness the prover needs (lambda/8)
+    size_t witness_bits;      // VOLEitH witness: NIBS part + MAYO preimage
+    size_t nibs_witness_bits; // NIBS part only
+    size_t mayo_s_bits;       // MAYO preimage part
+    size_t constraints;       // QuickSilver constraints
+    size_t tau;               // VOLEitH repetition parameter
+    size_t k_bytes;           // receiver LowMC key K
+    size_t r_bytes;           // signer nonce r
+    size_t op_bytes;          // BCGY opening (0 for sPRP)
+    size_t salt_bytes;        // MAYO salt in the witness (0 for One-More-MAYO)
+    size_t pkr_bytes;         // receiver public key pk_R
+    size_t m_bytes;           // public message m
+    size_t t_bytes;           // MAYO target bytes
+    size_t s_bytes;           // MAYO preimage (encoded, no salt)
+    size_t expanded_pk_bytes; // MAYO expanded public key
+    size_t lowmc_gadgets;
+    size_t rain_gadgets;
+    size_t target_blocks;     // Rain calls in the target derivation
+} nibs_instance_info;
 
-    // v1 128
-    bool keccak_then_mayo128sv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
+bool nibs_instance_info_get(unsigned variant, unsigned level, unsigned speed, unsigned version,
+                            nibs_instance_info* out);
 
-    bool keccak_then_mayo128fv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
+// fs_context: 32 bytes absorbed into every Fiat-Shamir challenge. Callers bind
+// the statement here, e.g. H("NIBS" || ids || vk || m).
+// random_seed: random_seed_bytes of fresh randomness (hedged with the witness).
+bool nibs_prove(unsigned variant, unsigned level, unsigned speed, unsigned version, uint8_t* proof,
+                size_t proof_len, const uint8_t* random_seed, size_t random_seed_len,
+                const uint8_t* expanded_pk, const uint8_t* m_pub, const uint8_t* s,
+                const uint8_t* K, const uint8_t* op, const uint8_t* nonce, const uint8_t* salt,
+                const uint8_t* fs_context);
 
-    bool keccak_then_mayo128sv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
+bool nibs_verify(unsigned variant, unsigned level, unsigned speed, unsigned version,
+                 const uint8_t* proof, size_t proof_len, const uint8_t* expanded_pk,
+                 const uint8_t* m_pub, const uint8_t* fs_context);
 
-    bool keccak_then_mayo128fv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
+// Testing aid: build the witness from the given secrets, optionally flip one
+// witness bit (flip_bit < witness_bits; SIZE_MAX for none), evaluate the
+// circuit and return the number of unsatisfied constraints (0 = the relation
+// holds). Does not produce a proof.
+size_t nibs_count_unsatisfied(unsigned variant, unsigned level, unsigned speed, unsigned version,
+                              const uint8_t* expanded_pk, const uint8_t* m_pub, const uint8_t* s,
+                              const uint8_t* K, const uint8_t* op, const uint8_t* nonce,
+                              const uint8_t* salt, size_t flip_bit);
 
+// Cleartext derivations (identical to what the circuit proves).
+void nibs_derive_pkr(unsigned variant, unsigned level, const uint8_t* K, const uint8_t* op,
+                     uint8_t* pkr);
+void nibs_derive_message(unsigned variant, unsigned level, const uint8_t* K, const uint8_t* r,
+                         uint8_t* m);
+// MAYO target t = T(msg) for msg = r || pk_R (|| salt).
+void nibs_target(unsigned level, const uint8_t* msg, size_t msg_len, uint8_t* t, size_t t_len);
 
-    // v1 192
-    bool keccak_then_mayo192sv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-    
-    bool keccak_then_mayo192fv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
+// One RainHash-512 call (input 64 bytes; first outlen bytes of the output).
+void rain_hash_512_7_c(uint8_t* output, size_t outlen, const uint8_t* input, size_t inlen);
 
-    bool keccak_then_mayo192sv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    bool keccak_then_mayo192fv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    // v1 256
-    bool keccak_then_mayo256sv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-    
-    bool keccak_then_mayo256fv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-
-    bool keccak_then_mayo256sv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    bool keccak_then_mayo256fv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    // ------ v2 ------
-    // getters for the parameters
-    void get_keccak_then_mayo128sv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo128fv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo192sv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo192fv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo256sv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_keccak_then_mayo256fv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-
-    // v2 128
-    bool keccak_then_mayo128sv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-
-    bool keccak_then_mayo128fv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-
-    bool keccak_then_mayo128sv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    bool keccak_then_mayo128fv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-
-    // v2 192
-    bool keccak_then_mayo192sv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-    
-    bool keccak_then_mayo192fv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-
-    bool keccak_then_mayo192sv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    bool keccak_then_mayo192fv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    // v2 256
-    bool keccak_then_mayo256sv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-    
-    bool keccak_then_mayo256fv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* additional_r);
-
-    bool keccak_then_mayo256sv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-
-    bool keccak_then_mayo256fv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* additional_r);
-#endif
-
-#if defined WITH_RAINHASH
-
-    void rain_hash_512_7_c(uint8_t* output, size_t  outlen,const uint8_t* input, size_t inlen);
-
-    
-    // ------ v1 ------
-
-    // getters for the parameters
-    void get_rainhash_then_mayo128sv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_rainhash_then_mayo128fv1_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-
-    // v2 128
-    // pkR = c = trunc_256( RainHash( op | K | 0xff-fill ) )
-    void nibs_rain_pkr(const uint8_t* op, const uint8_t* k, uint8_t* pkr);
-
-    bool rainhash_then_mayo128sv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* rain_rc_qs, uint8_t* rain_mat_qs,
-                uint8_t* s, uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* salt, uint8_t* additional_r);
-
-    bool rainhash_then_mayo128fv1_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* rain_rc_qs, uint8_t* rain_mat_qs,
-                uint8_t* s, uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* salt, uint8_t* additional_r);
-
-    bool rainhash_then_mayo128sv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, 
-                uint8_t* msg_hash, uint8_t* rain_rc, uint8_t* rain_mat, uint8_t* additional_r);
-
-    bool rainhash_then_mayo128fv1_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, 
-                uint8_t* msg_hash, uint8_t* rain_rc, uint8_t* rain_mat, uint8_t* additional_r);
-
-                
-    // ------ v2 ------
-
-    // getters for the parameters
-    void get_rainhash_then_mayo128sv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-    void get_rainhash_then_mayo128fv2_parameters(size_t *chal1_size,
-                                               size_t *r_size,
-                                               size_t *u_size,
-                                               size_t *v_size,
-                                               size_t *forest_size,
-                                               size_t *iv_pre_size,
-                                               size_t *hashed_leaves_size,
-                                               size_t *proof_size,
-                                               size_t *proof1_size,
-                                               size_t *packed_pk_size,
-                                               size_t *packed_sk_size,
-                                               size_t *random_seed_size,
-                                               size_t *pk_seed_size,
-                                               size_t *p1_size,
-                                               size_t *p2_size,
-                                               size_t *p3_size,
-                                               size_t *h_size,
-                                               size_t *s_size);
-
-    // v2 128
-    bool rainhash_then_mayo128sv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* rain_rc_qs, uint8_t* rain_mat_qs,
-                uint8_t* s, uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* salt, uint8_t* additional_r);
-
-    bool rainhash_then_mayo128fv2_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* rain_rc_qs, uint8_t* rain_mat_qs,
-                uint8_t* s, uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* salt, uint8_t* additional_r);
-
-    bool rainhash_then_mayo128sv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, 
-                uint8_t* msg_hash, uint8_t* rain_rc, uint8_t* rain_mat, uint8_t* additional_r);
-
-    bool rainhash_then_mayo128fv2_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, 
-                uint8_t* msg_hash, uint8_t* rain_rc, uint8_t* rain_mat, uint8_t* additional_r);
-
-#endif
+// LowMC (see lowmc_plain/lowmc.hpp)
+void nibs_lowmc_init(void);
+unsigned nibs_lowmc_block_bytes(unsigned level);
+unsigned nibs_lowmc_rounds(unsigned level);
+void nibs_lowmc_encrypt(unsigned level, const uint8_t* key, const uint8_t* pt, uint8_t* ct);
+void nibs_lowmc_decrypt(unsigned level, const uint8_t* key, const uint8_t* ct, uint8_t* pt);
 
 #ifdef __cplusplus
 }

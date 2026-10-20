@@ -1,86 +1,21 @@
+#!/bin/bash
+# Build everything and benchmark the NIBS variants.
+#
+#   ./bench_rainhash_nibs.sh                 # all 4 variants x 12 VOLEitH sets
+#   NIBS_BENCH_ZK=SV1_128,SV1_192,SV1_256 ./bench_rainhash_nibs.sh
+#   NIBS_BENCH_VARIANTS=BCGY+MAYO,sPRP+OMM NIBS_BENCH_ITERS=20 ./bench_rainhash_nibs.sh
+#
+# Results: ni-blind-signatures/bench_results/{summary.md,summary.csv,<variant>_<set>.txt}
+set -euo pipefail
+cd "$(dirname "$0")"
 
-echo "Scheme - Sig1 (ms), Sig2 (ms), Sig3 (ms), Ver (ms), Comm (KB), BS (KB)" > bench_log.txt
-echo "--------------------------------------------------------" >> bench_log.txt
+export RUST_MIN_STACK=${RUST_MIN_STACK:-8388608}
+if [ -z "${LIBCLANG_PATH:-}" ] && [ -d /usr/lib/llvm-18/lib ]; then
+    export LIBCLANG_PATH=/usr/lib/llvm-18/lib
+fi
 
-git submodule update --init --recursive
-cd vole
-# Getting conservative bench
-chmod +x clean.sh
-./clean.sh 
-# cargo test test_and_bench_sign_loop_conservative_128sv1 --no-run >> ../bench_log_misc.txt 2>&1
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_128sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_128fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-
-# echo "--------------------------------------------------------" >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_192sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_192fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# echo "--------------------------------------------------------" >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_256sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_256fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-
-# cd ..
-# echo "--------------------------------------------------------" >> bench_log.txt
-# echo "--------------------------------------------------------" >> bench_log.txt
-# cd vole
-# # Getting conservative deg-16 bench
-# ./clean.sh 
-# chmod +x build_consv_bs_keccak_deg16.sh
-# ./build_consv_bs_keccak_deg16.sh >> ../bench_log_misc.txt 2>&1
-# cd ..
-# cd vole-keccak-deg16-then-mayo-sys
-# cargo clean
-# cd ..
-# cd blind-signatures-conservative-deg16
-# cargo clean
-# cargo test test_and_bench_sign_loop_conservative_128sv1 --no-run >> ../bench_log_misc.txt 2>&1
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_128sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_128fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# echo "--------------------------------------------------------" >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_192sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_192fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# echo "--------------------------------------------------------" >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_256sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_256fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-
-cd ..
-# echo "--------------------------------------------------------" >> bench_log.txt
-# echo "--------------------------------------------------------" >> bench_log.txt
-cd vole
-# Getting conservative rainhash bench
-./clean.sh 
-chmod +x build_consv_bs_rainhash.sh
-./build_consv_bs_rainhash.sh >> ../bench_log_misc.txt 2>&1
-cd ..
-cd vole-rainhash-then-mayo-sys
-cargo clean
-cd ..
-cd blind-signatures-conservative-rain
-cargo clean
-cargo test test_and_bench_sign_loop_conservative_rain_128sv1 --no-run >> ../bench_log_misc.txt 2>&1
-RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_rain_128sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_conservative_rain_128fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-
-# cd ..
-# echo "--------------------------------------------------------" >> bench_log.txt
-# echo "--------------------------------------------------------" >> bench_log.txt
-# cd vole
-# # Getting optimized bench
-# ./clean.sh 
-# chmod +x build_opti_bs.sh
-# ./build_opti_bs.sh >> ../bench_log_misc.txt 2>&1
-# cd ..
-# cd vole-mayo-sys
-# cargo clean
-# cd ..
-# cd blind-signatures
-# cargo clean
-# cargo test test_and_bench_sign_loop_optimized_128sv1 --no-run >> ../bench_log_misc.txt 2>&1
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_optimized_128sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_optimized_128fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# echo "--------------------------------------------------------" >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_optimized_192sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_optimized_192fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# echo "--------------------------------------------------------" >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_optimized_256sv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# RUST_MIN_STACK=9999999999 cargo test test_and_bench_sign_loop_optimized_256fv1 -- --nocapture | sed -n '/MAYO/p' >> ../bench_log.txt
-# echo "--------------------------------------------------------" >> ../bench_log.txt
+cd ni-blind-signatures
+cargo test --release --test nibs --test sprp --test soundness
+cargo bench --bench nibs
+echo
+echo "summary: $(pwd)/bench_results/summary.md"

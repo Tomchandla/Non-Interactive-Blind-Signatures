@@ -1,100 +1,75 @@
-// lowmc_params.hpp -- LowMC parameter sets for NIBS at NIST security
-// levels 1, 3 and 5.
+// lowmc_params.hpp -- LowMC instances for NIBS at NIST security levels 1, 3, 5.
 //
-// Round counts are pulled from the LowMC reference repository, 
-// https://github.com/LowMC/lowmc (MIT licensed), which implements the 
-// round formula of "Ciphers for MPC and FHE", EUROCRYPT 2015
+// All three instances are compiled into the same library; the circuit and
+// the cleartext code select one by NIST level (1, 3 or 5), which is tied to
+// the VOLEitH security parameter lambda = 128 / 192 / 256.
+//
+// Parameters (n = k = lambda, full S-box layer, data complexity d = 2^64):
+//   level 1: n = k = 128, m = 42 S-boxes (+2 identity bits), r = 13
+//   level 3: n = k = 192, m = 64 S-boxes (+0 identity bits), r = 13
+//   level 5: n = k = 256, m = 85 S-boxes (+1 identity bit),  r = 13
+// The round numbers are the output of determine_rounds.py from the LowMC
+// reference repository (https://github.com/LowMC/lowmc) for (n, m, d=64, k);
+// the binding attack class for all three is "derivative + interpolation".
 
 #ifndef NIBS_LOWMC_PARAMS_H
 #define NIBS_LOWMC_PARAMS_H
 
-#ifndef NIBS_LOWMC_LEVEL
-#define NIBS_LOWMC_LEVEL 1
-#endif
+#ifdef __cplusplus
+#include <cstddef>
 
-// ---------------------------------------------------------------------------
-// Selected level
-// ---------------------------------------------------------------------------
+namespace nibs_lowmc
+{
 
-#if NIBS_LOWMC_LEVEL == 1
+template <unsigned LEVEL> struct params;
 
-#define NIBS_LOWMC_LAMBDA 128
-#define NIBS_LOWMC_BLOCK_BITS 128
-#define NIBS_LOWMC_KEY_BITS 128
-#define NIBS_LOWMC_BOXES 42
-#define NIBS_LOWMC_IDENTITY_BITS 2
-#define NIBS_LOWMC_DATA_LOG2 64
-#define NIBS_LOWMC_ROUNDS 13
-#define NIBS_LOWMC_MAYO_SET "MAYO1" // salt 24 B
-
-#elif NIBS_LOWMC_LEVEL == 3
-
-#define NIBS_LOWMC_LAMBDA 192
-#define NIBS_LOWMC_BLOCK_BITS 192
-#define NIBS_LOWMC_KEY_BITS 192
-#define NIBS_LOWMC_BOXES 64
-#define NIBS_LOWMC_IDENTITY_BITS 0
-#define NIBS_LOWMC_DATA_LOG2 64
-#define NIBS_LOWMC_ROUNDS 13
-#define NIBS_LOWMC_MAYO_SET "MAYO3" // salt 32 B
-
-#elif NIBS_LOWMC_LEVEL == 5
-
-#define NIBS_LOWMC_LAMBDA 256
-#define NIBS_LOWMC_BLOCK_BITS 256
-#define NIBS_LOWMC_KEY_BITS 256
-#define NIBS_LOWMC_BOXES 85
-#define NIBS_LOWMC_IDENTITY_BITS 1
-#define NIBS_LOWMC_DATA_LOG2 64
-#define NIBS_LOWMC_ROUNDS 13
-#define NIBS_LOWMC_MAYO_SET "MAYO5" // salt 40 B
-
-#else
-#error "NIBS_LOWMC_LEVEL must be 1, 3 or 5"
-#endif
-
-enum {
-    // Byte widths.
-    NIBS_LOWMC_BLOCK_BYTES = NIBS_LOWMC_BLOCK_BITS / 8, // 16 / 24 / 32
-    NIBS_LOWMC_KEY_BYTES = NIBS_LOWMC_KEY_BITS / 8,     // K
-    NIBS_LOWMC_ROW_BYTES = NIBS_LOWMC_BLOCK_BYTES,      // packed matrix row
-    NIBS_LOWMC_NONCE_BYTES = NIBS_LOWMC_LAMBDA / 8,     // r, one full block
-    NIBS_LOWMC_MESSAGE_BYTES = NIBS_LOWMC_BLOCK_BYTES,  // m, public
-    NIBS_LOWMC_OPEN_BYTES = NIBS_LOWMC_LAMBDA / 8,      // op: Rain side only
-
-    // Witness: one post-S-box state per round.
-    NIBS_LOWMC_STATE_BYTES = NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BLOCK_BYTES,
-
-    // LowMC region of the VOLEitH witness: K || r || GadM states.
-    NIBS_LOWMC_WITNESS_BYTES = NIBS_LOWMC_KEY_BYTES + NIBS_LOWMC_NONCE_BYTES +
-                               NIBS_LOWMC_STATE_BYTES,
-    NIBS_LOWMC_WITNESS_BITS = 8 * NIBS_LOWMC_WITNESS_BYTES,
-
-    // Circuit cost
-    NIBS_LOWMC_CONSTRAINTS = NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BLOCK_BITS,
-    NIBS_LOWMC_PUBLIC_CONSTRAINTS = NIBS_LOWMC_BLOCK_BITS,
-    NIBS_LOWMC_AND_GATES = 3 * NIBS_LOWMC_BOXES * NIBS_LOWMC_ROUNDS,
-
-    NIBS_LOWMC_MATRIX_BYTES =
-        (2 * NIBS_LOWMC_ROUNDS + 1) * NIBS_LOWMC_BLOCK_BITS *
-            NIBS_LOWMC_ROW_BYTES +
-        NIBS_LOWMC_ROUNDS * NIBS_LOWMC_BLOCK_BYTES,
+template <> struct params<1>
+{
+    static constexpr unsigned BLOCK_BITS = 128;
+    static constexpr unsigned KEY_BITS = 128;
+    static constexpr unsigned BOXES = 42;
+    static constexpr unsigned ROUNDS = 13;
+    static constexpr unsigned DATA_LOG2 = 64;
 };
 
-// Size checks
-#ifdef __cplusplus
-static_assert(3 * NIBS_LOWMC_BOXES + NIBS_LOWMC_IDENTITY_BITS ==
-                  NIBS_LOWMC_BLOCK_BITS,
-              "S-box layer plus identity part must cover the block exactly");
-static_assert(NIBS_LOWMC_IDENTITY_BITS < 3,
-              "identity part is the remainder of a full S-box layer");
-static_assert(NIBS_LOWMC_BLOCK_BITS % 8 == 0,
-              "block must be byte aligned: the packing helpers assume it");
-static_assert(NIBS_LOWMC_KEY_BITS <= NIBS_LOWMC_BLOCK_BITS,
-              "keyblock is stored in a block-wide bitset");
-static_assert(8 * NIBS_LOWMC_NONCE_BYTES == NIBS_LOWMC_BLOCK_BITS,
-              "r is the plaintext block verbatim; a mismatch means padding "
-              "or a domain tag was reintroduced without updating the gadget");
+template <> struct params<3>
+{
+    static constexpr unsigned BLOCK_BITS = 192;
+    static constexpr unsigned KEY_BITS = 192;
+    static constexpr unsigned BOXES = 64;
+    static constexpr unsigned ROUNDS = 13;
+    static constexpr unsigned DATA_LOG2 = 64;
+};
+
+template <> struct params<5>
+{
+    static constexpr unsigned BLOCK_BITS = 256;
+    static constexpr unsigned KEY_BITS = 256;
+    static constexpr unsigned BOXES = 85;
+    static constexpr unsigned ROUNDS = 13;
+    static constexpr unsigned DATA_LOG2 = 64;
+};
+
+template <unsigned LEVEL> struct derived : params<LEVEL>
+{
+    using P = params<LEVEL>;
+    static constexpr unsigned IDENTITY_BITS = P::BLOCK_BITS - 3 * P::BOXES;
+    static constexpr unsigned BLOCK_BYTES = P::BLOCK_BITS / 8;
+    static constexpr unsigned KEY_BYTES = P::KEY_BITS / 8;
+    static constexpr unsigned STATE_BYTES = P::ROUNDS * BLOCK_BYTES; // post-S-box states
+    static constexpr unsigned AND_GATES = 3 * P::BOXES * P::ROUNDS;
+
+    static_assert(3 * P::BOXES + IDENTITY_BITS == P::BLOCK_BITS);
+    static_assert(IDENTITY_BITS < 3, "full S-box layer: identity part is a remainder");
+    static_assert(P::BLOCK_BITS % 8 == 0 && P::KEY_BITS <= P::BLOCK_BITS);
+};
+
+constexpr unsigned level_of_bits(std::size_t lambda)
+{
+    return lambda == 128 ? 1 : lambda == 192 ? 3 : 5;
+}
+
+} // namespace nibs_lowmc
 #endif
 
 #endif // NIBS_LOWMC_PARAMS_H

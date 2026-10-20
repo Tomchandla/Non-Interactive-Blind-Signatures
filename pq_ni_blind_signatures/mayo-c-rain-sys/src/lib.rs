@@ -8,26 +8,6 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 pub mod mayo;
 
 #[cfg(test)]
-mod test_rain {
-    use crate::rain_hash_512_7_c;
-
-    #[test]
-    fn test_rain() {
-        let input = [42; 64];
-        let mut output = vec![0; 64];
-        unsafe {
-            rain_hash_512_7_c(
-                output.as_mut_ptr(),
-                output.len(),
-                input.as_ptr(),
-                input.len(),
-            )
-        }
-        println!("{:?}", output)
-    }
-}
-
-#[cfg(test)]
 mod test_mayo_loop {
     use crate::{
         CPK_BYTES_MAX, CSK_BYTES_MAX, MAYO_5, MAYO_OK, SIG_BYTES_MAX, mayo_keypair, mayo_sign,

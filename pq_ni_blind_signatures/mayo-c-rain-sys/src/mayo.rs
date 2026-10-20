@@ -42,17 +42,24 @@ impl MAYO {
         (pk, sk)
     }
 
-    pub fn sign_fixed_length_rain(
-        &self,
-        sk: &MAYOSkType,
-        m: &MAYOMessageType,
-    ) -> MAYOSignatureType {
-        let mut sig_len = 0; // not important for us
-        let mut sig = vec![0; self.mayo_params.sig_bytes];
+    /// NIST level (1, 3, 5) of this parameter set as used by NIBS.
+    pub fn nibs_level(&self) -> u32 {
+        unsafe { crate::mayo_nibs_level(&self.mayo_params.mayo_param_set) as u32 }
+    }
 
+    /// Presignature on the fixed-length NIBS message `m = r || pk_R`.
+    ///
+    /// * `omm = false`: standard MAYO with the Rain target `T(m || salt)`;
+    ///   the output is `s || salt`.
+    /// * `omm = true`: One-More-MAYO, a preimage of `T(m)` without salt;
+    ///   the output is `s`.
+    pub fn sign_nibs(&self, sk: &MAYOSkType, m: &MAYOMessageType, omm: bool) -> MAYOSignatureType {
+        let mut sig_len = 0usize;
+        let mut sig = vec![0u8; self.mayo_params.sig_bytes];
         assert_eq!(MAYO_OK, unsafe {
-            crate::mayo_rain_sign_fixed_length_input(
+            crate::mayo_nibs_sign(
                 &self.mayo_params.mayo_param_set,
+                omm as i32,
                 sig.as_mut_ptr(),
                 &mut sig_len,
                 m.as_ptr(),
@@ -60,23 +67,26 @@ impl MAYO {
                 sk.as_ptr(),
             ) as u32
         });
-
+        sig.truncate(sig_len);
         sig
     }
 
-    pub fn verify_fixed_length_rain(
+    pub fn verify_nibs(
         &self,
         pk: &MAYOPkType,
         m: &MAYOMessageType,
         sig: &MAYOSignatureType,
+        omm: bool,
     ) -> bool {
         MAYO_OK
             == unsafe {
-                crate::mayo_rain_verify_fixed_length_input(
+                crate::mayo_nibs_verify(
                     &self.mayo_params.mayo_param_set,
+                    omm as i32,
                     m.as_ptr(),
                     m.len(),
                     sig.as_ptr(),
+                    sig.len(),
                     pk.as_ptr(),
                 ) as u32
             }
@@ -84,20 +94,30 @@ impl MAYO {
 }
 
 #[cfg(test)]
-mod test_mayo_rainhash {
+mod test_mayo_nibs {
     use crate::mayo::{MAYO, MAYOParameterSet};
 
     #[test]
-    fn mayo_sign_rain() {
-        // initialize with MAYO_1 parameters
-        let mayo1 = MAYO::setup(MAYOParameterSet::MAYO1);
-        // generate the keys
-        let (pk, sk) = mayo1.keygen();
-
-        let m = vec![42; mayo1.mayo_params.m_digest_bytes];
-
-        let sig = mayo1.sign_fixed_length_rain(&sk, &m);
-
-        assert!(mayo1.verify_fixed_length_rain(&pk, &m, &sig));
+    fn mayo_nibs_sign_both_modes_all_levels() {
+        for (set, msg_len) in [
+            (MAYOParameterSet::MAYO1, 48usize),
+            (MAYOParameterSet::MAYO3, 72),
+            (MAYOParameterSet::MAYO5, 96),
+        ] {
+            let mayo = MAYO::setup(set);
+            let (pk, sk) = mayo.keygen();
+            let m = vec![42u8; msg_len];
+            for omm in [false, true] {
+                let sig = mayo.sign_nibs(&sk, &m, omm);
+                let expect = mayo.mayo_params.sig_bytes - if omm { mayo.mayo_params.salt_bytes } else { 0 };
+                assert_eq!(sig.len(), expect);
+                assert!(mayo.verify_nibs(&pk, &m, &sig, omm));
+                let mut bad = m.clone();
+                bad[0] ^= 1;
+                assert!(!mayo.verify_nibs(&pk, &bad, &sig, omm));
+                // the two modes are not interchangeable
+                assert!(!mayo.verify_nibs(&pk, &m, &sig, !omm));
+            }
+        }
     }
 }

@@ -1,6 +1,12 @@
-pub mod derive;
-pub mod ni_blind_sig_rain;
+//! Post-quantum non-interactive blind signatures (NIBS) from MAYO, LowMC,
+//! RainHash and VOLE-in-the-Head.
+//!
+//! Four variants (BCGY or sPRP framework, standard or One-More MAYO) at NIST
+//! levels 1, 3 and 5; see [`params::NibsParams`].
+
+pub mod nibs;
+pub mod params;
 pub mod zk;
 
-pub use ni_blind_sig_rain as blind_sig_conservative_rain;
-pub use ni_blind_sig_rain as nibs_rain;
+pub use nibs::{Nibs, RecipientSk, Signature};
+pub use params::{Framework, MayoMode, NibsParams, ZKType};

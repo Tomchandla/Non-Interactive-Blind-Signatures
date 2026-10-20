@@ -3,76 +3,34 @@
 #![allow(non_snake_case)]
 #![allow(improper_ctypes)]
 
+//! Raw bindings to the NIBS VOLEitH library (`libconsv_bs_rainhash`).
+//! See `vole/conservative_bs/faest.h` for the C interface.
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-pub mod lowmc; // Only addition to this file.
+pub mod lowmc;
 
 #[cfg(test)]
-mod test_rain {
-    use crate::rain_hash_512_7_c;
+mod tests {
+    use super::*;
 
     #[test]
-    fn test_rain() {
-        let input = [17; 64];
-        let mut output = vec![0; 64];
-        unsafe {
-            rain_hash_512_7_c(
-                output.as_mut_ptr(),
-                output.len(),
-                input.as_ptr(),
-                input.len(),
-            )
+    fn every_instance_reports_sizes() {
+        for variant in 0..4u32 {
+            for level in [1u32, 3, 5] {
+                for speed in 0..2u32 {
+                    for version in 1..=2u32 {
+                        let mut info: nibs_instance_info = unsafe { std::mem::zeroed() };
+                        assert!(unsafe {
+                            nibs_instance_info_get(variant, level, speed, version, &mut info)
+                        });
+                        assert!(info.proof_bytes > 0);
+                        assert_eq!(info.random_seed_bytes as u32 * 8, [128, 192, 256][(level / 2) as usize]);
+                    }
+                }
+            }
         }
-        println!("{:?}", output)
-    }
-}
-
-#[cfg(test)]
-mod vole_proof_test_rainhash_then_mayo {
-    use crate::get_rainhash_then_mayo128fv1_parameters;
-
-    #[test]
-    fn test_rainhash_then_mayo() {
-        let mut chal1_size = 0_usize;
-        let mut r_size = 0_usize;
-        let mut u_size = 0_usize;
-        let mut v_size = 0_usize;
-        let mut forest_size = 0_usize;
-        let mut iv_pre_size = 0_usize;
-        let mut hashed_leaves_size = 0_usize;
-        let mut proof_size = 0_usize;
-        let mut proof1_size = 0_usize;
-        let mut packed_pk_size = 0_usize;
-        let mut packed_sk_size = 0_usize;
-        let mut random_seed_size = 0_usize;
-        let mut pk_seed_size = 0_usize;
-        let mut p1_size = 0_usize;
-        let mut p2_size = 0_usize;
-        let mut p3_size = 0_usize;
-        let mut h_size = 0_usize;
-        let mut s_size = 0_usize;
-
-        unsafe {
-            get_rainhash_then_mayo128fv1_parameters(
-                &mut chal1_size,
-                &mut r_size,
-                &mut u_size,
-                &mut v_size,
-                &mut forest_size,
-                &mut iv_pre_size,
-                &mut hashed_leaves_size,
-                &mut proof_size,
-                &mut proof1_size,
-                &mut packed_pk_size,
-                &mut packed_sk_size,
-                &mut random_seed_size,
-                &mut pk_seed_size,
-                &mut p1_size,
-                &mut p2_size,
-                &mut p3_size,
-                &mut h_size,
-                &mut s_size,
-            )
-        };
+        let mut info: nibs_instance_info = unsafe { std::mem::zeroed() };
+        assert!(!unsafe { nibs_instance_info_get(4, 1, 0, 1, &mut info) });
     }
 }

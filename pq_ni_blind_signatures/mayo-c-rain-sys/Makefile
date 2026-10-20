@@ -52,7 +52,7 @@ all: update_submodules mayo
 mayo: $(LIB)
 
 $(LIB): $(OBJECTS) | $(LIBDIR)
-	$(CC) -shared -o $@ $(OBJECTS) $(LDFLAGS)
+	$(CC) -shared -o $@ $(OBJECTS) $(LDFLAGS) -L../vole-rainhash-then-mayo-sys/target/debug -lconsv_bs_rainhash
 
 $(OBJDIR)/%.o: %.c | $(OBJDIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@

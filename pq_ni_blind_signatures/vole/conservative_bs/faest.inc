@@ -23,243 +23,124 @@ extern "C" {
     #include "test/fips202.h"
 }
 
-#if defined WITH_RAINHASH
-#include "rainhash_plain/rain_hash.h"
-#include "lowmc_plain/lowmc.hpp"
-#endif
+#include <memory>
+#include "nibs_target.hpp"
 
 namespace faest
 {
 
-// NOTE: Use these functions to serialize the pk and sk, after Sign2 algorithm
-#if defined WITH_KECCAK
-template <typename P> inline void serialize_pk(uint8_t* pk, const uint8_t* expanded_pk, const uint8_t* msg_hash) {
-#endif
-#if defined WITH_RAINHASH
-template <typename P> inline void serialize_pk(uint8_t* pk, const uint8_t* expanded_pk, const uint8_t* m_pub) {
-#endif
-    #if defined WITH_KECCAK
-        memcpy(pk, expanded_pk, VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<P::secpar_v>);
-        pk += VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<P::secpar_v>;
+// Inputs to a NIBS proof. Byte strings are in the layout of nibs_layout<S, O>.
+struct nibs_prover_inputs
+{
+    const uint8_t* expanded_pk; // MAYO expanded public key (statement)
+    const uint8_t* m_pub;       // public message m = LowMC_K(.) (statement)
+    const uint8_t* s;           // MAYO preimage, encoded (without salt)
+    const uint8_t* K;           // receiver LowMC key
+    const uint8_t* op;          // BCGY commitment opening (ignored for sPRP)
+    const uint8_t* nonce;       // signer nonce r
+    const uint8_t* salt;        // MAYO salt (ignored for One-More-MAYO)
+};
 
-        memcpy(pk, msg_hash, HASHED_MSG_SIZE_BYTES<P::secpar_v>);
-    #endif
+// Fill the NIBS witness (nibs_layout<S, O>::WITNESS_BYTES) from the secrets.
+template <typename P> void nibs_build_witness(const nibs_prover_inputs& in, uint8_t* w)
+{
+    constexpr auto S = P::secpar_v;
+    using LAY = nibs_layout<S, P::owf_v>;
+    constexpr unsigned LEVEL = nibs_level<S>::LEVEL;
 
-    #if defined WITH_RAINHASH
-        memcpy(pk, expanded_pk, VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<P::secpar_v>);
-        pk += VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<P::secpar_v>;
-        memcpy(pk, m_pub, NIBS_M_BYTES);           // was HASHED_MSG_SIZE_BYTES
-        // rain rc / mat copies unchanged
+    memset(w, 0, LAY::WITNESS_BYTES);
+    memcpy(w + LAY::K_OFF / 8, in.K, LAY::K_BYTES);
+    memcpy(w + LAY::R_OFF / 8, in.nonce, LAY::R_BYTES);
+    if constexpr (LAY::OP_BYTES)
+        memcpy(w + LAY::OP_OFF / 8, in.op, LAY::OP_BYTES);
+    if constexpr (LAY::SALT_BYTES)
+        memcpy(w + LAY::SALT_OFF / 8, in.salt, LAY::SALT_BYTES);
 
-    #endif
-    
+    uint8_t m[32];
+    nibs_message(LEVEL, LAY::SPRP, in.K, in.nonce, m, w + LAY::LOWMC_M_OFF / 8);
+
+    uint8_t pkr[64];
+    if constexpr (LAY::SPRP)
+        nibs_sprp_pkr(LEVEL, in.K, pkr, w + LAY::LOWMC_PK0_OFF / 8);
+    else
+        nibs_bcgy_pkr(LEVEL, in.op, in.K, pkr, w + LAY::GADA_OFF / 8);
+
+    uint8_t msg[LAY::T_MSG_BYTES];
+    memcpy(msg, in.nonce, LAY::R_BYTES);
+    memcpy(msg + LAY::R_BYTES, pkr, LAY::PKR_BYTES);
+    if constexpr (LAY::SALT_BYTES)
+        memcpy(msg + LAY::R_BYTES + LAY::PKR_BYTES, in.salt, LAY::SALT_BYTES);
+    uint8_t t[LAY::T_BYTES];
+    nibs_target_hash(LEVEL, msg, LAY::T_MSG_BYTES, t, LAY::T_BYTES, w + LAY::T_OFF / 8);
 }
 
-template <typename P> inline void serialize_sk(uint8_t* sk, const uint8_t* pk, const uint8_t* s, const uint8_t* witness) {
-    
-    #if defined WITH_KECCAK
-    memcpy(sk, pk, VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>);
-    sk += VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>;
-
-    memcpy(sk, witness, VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>);
-    sk += VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>;
-
-    memcpy(sk, s, VOLEMAYO_S_BYTES<P::secpar_v>);
-    #endif
-
-    #if defined WITH_RAINHASH
-    // copying all the mayo pk stuff to sk
-    memcpy(sk, pk, VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>);
-    size_t offset = VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>;
-    sk += VOLEMAYO_PUBLIC_SIZE_BYTES<P::secpar_v>;
-
-    // the rain pk
-    memcpy(sk, pk + offset, VOLERAINHASH_PUBLIC_SIZE_BYTES);
-    sk += VOLERAINHASH_PUBLIC_SIZE_BYTES;
-
-    // NOTE: First rainhash happens, so store rainhash first after pk
-    memcpy(sk, witness, VOLERAINHASH_WITNESS_SIZE_BYTES<P::secpar_v>);
-    sk += VOLERAINHASH_WITNESS_SIZE_BYTES<P::secpar_v>;
-
-    // NOTE: storing the mayo sk
-    memcpy(sk, s, VOLEMAYO_S_BYTES<P::secpar_v>);
-    #endif
-
-}
-
-template <typename P>
-#if defined WITH_KECCAK
-void get_witness_nibs(uint8_t* skr_ptr, uint8_t* ctx, uint8_t* salt, uint8_t* witness) {
-#endif
-#if defined WITH_RAINHASH
-void get_witness_nibs(uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, uint8_t* salt, uint8_t* witness) {
-#endif
-
-    #if defined WITH_KECCAK
-        std::array<uint8_t, VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>> commit_input;
-        memset((uint8_t*)commit_input.data(), 0x00, VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>);
-
-        size_t offset = 0;        
-        // public
-        memcpy((uint8_t*)commit_input.data() + offset, msg_hash, HASHED_MSG_SIZE_BYTES<P::secpar_v>);
-        offset += HASHED_MSG_SIZE_BYTES<P::secpar_v>;
-        // witness
-        memcpy((uint8_t*)commit_input.data() + offset, ctx, RAND_SIZE_BYTES<P::secpar_v>);
-        memcpy(witness, (uint8_t*)commit_input.data() + offset, RAND_SIZE_BYTES<P::secpar_v>);
-
-        // the modified shake stores all intermediate values of S to witness.
-        // the values start in witness + RAND_SIZE_BYTES<P::secpar_v> and are of length
-        // - VOLEKECCAK_B_BYTES*((VOLEKECCAK_NUM_ROUNDS/6))
-        // - or VOLEKECCAK_B_BYTES*(VOLEKECCAK_NUM_ROUNDS) for the non degree 16 version
-        // the last block contains the last S, and from it the eventual hash value can be read
-
-        #if defined KECCAK_DEG_16
-            shake256_w(witness + RAND_SIZE_BYTES<P::secpar_v>,
-                    (uint8_t*)commit_input.data(), VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>);
-
-        #else
-            shake256_w(witness + RAND_SIZE_BYTES<P::secpar_v>,
-                    (uint8_t*)commit_input.data(), VOLEKECCAK_COMMITMENT_INPUT_BYTES<P::secpar_v>);
-        #endif
-
-        #if defined KECCAK_DEG_16
-            size_t input_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS/6);
-            size_t witness_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS/6 + 1);
-
-            // copying the hash result (of length digest bytes) to a new input block witness
-            memcpy(witness + input_idx, witness + (RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES*((VOLEKECCAK_NUM_ROUNDS/6) - 1)), VOLEMAYO_DIGEST_BYTES<P::secpar_v>);
-
-            // copying the signature salt bytes to a new input block witness after digest bytes
-            memcpy(witness + input_idx + VOLEMAYO_DIGEST_BYTES<P::secpar_v>, salt, VOLEMAYO_SALT_BYTES<P::secpar_v>);
-
-            shake256_w(witness + witness_idx, witness + input_idx, VOLEKECCAK_MAYO_HASH_INPUT_BYTES<P::secpar_v>);
-            
-            // we need to manually add the padding from shake_w to the stored witness (for when the commitments are computed); needed for consistency
-            witness[input_idx + VOLEMAYO_DIGEST_BYTES<P::secpar_v> + VOLEMAYO_SALT_BYTES<P::secpar_v>] = VOLEKECCAK_PADDING_D;
-            witness[input_idx + VOLEKECCAK_RATE_BYTES - 1] = VOLEKECCAK_PADDING_0X80;
-        #else
-            size_t input_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS);
-            size_t witness_idx = RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES * (VOLEKECCAK_NUM_ROUNDS + 1);
-
-            // copying the digest bytes to a new input block witness
-            memcpy(witness + input_idx, witness + (RAND_SIZE_BYTES<P::secpar_v> + VOLEKECCAK_B_BYTES*((VOLEKECCAK_NUM_ROUNDS) - 1)), VOLEMAYO_DIGEST_BYTES<P::secpar_v>);
-
-            // copying the signature salt bytes to a new input block witness after digest bytes
-            memcpy(witness + input_idx + VOLEMAYO_DIGEST_BYTES<P::secpar_v>, salt, VOLEMAYO_SALT_BYTES<P::secpar_v>);
-
-            shake256_w(witness + witness_idx, witness + input_idx, VOLEKECCAK_MAYO_HASH_INPUT_BYTES<P::secpar_v>);
-                
-            // we need to manually add the padding from shake_w to the stored witness (for when the commitments are computed)
-            witness[input_idx + VOLEMAYO_DIGEST_BYTES<P::secpar_v> + VOLEMAYO_SALT_BYTES<P::secpar_v>] = VOLEKECCAK_PADDING_D;
-            witness[input_idx + VOLEKECCAK_RATE_BYTES - 1] = VOLEKECCAK_PADDING_0X80;
-
-        #endif
-    #endif
-
-    #if defined WITH_RAINHASH
-        // Parameter names kept from the FFI: skr_ptr carries K, nonce carries r.
-        nibs_lowmc_init();
-
-        // LowMC region: K | r | GadM post-S-box states (m discarded here; the
-        // caller publishes it separately).
-        nibs_lowmc_witness_expand(skr_ptr, nonce, witness, nullptr);
-
-        // GadA region: inA = op | K | 0xff-fill; out-block = c = pkR.
-        uint8_t* ga = witness + NIBS_GADA_IN_OFF / 8;
-        memset(ga, 0xff, VOLERAINHASH_B_BYTES);
-        memcpy(ga, open, NIBS_OP_BYTES);
-        memcpy(ga + NIBS_OP_BYTES, skr_ptr, NIBS_K_BYTES);
-        rain_hash_with_sbox_output(ga,
-                                   ga + VOLERAINHASH_B_BYTES,
-                                   witness + NIBS_GADA_OUT_OFF / 8);
-
-        // Rain block B1 = c(32) | r(16) | salt[0..16]
-        uint8_t* b1 = witness + NIBS_GAD2_B1_BIT_OFF / 8;
-        memcpy(b1, witness + NIBS_GADA_OUT_OFF / 8, NIBS_PKR_BYTES);
-        memcpy(b1 + NIBS_PKR_BYTES, nonce, NIBS_R_BYTES);
-        memcpy(b1 + NIBS_PKR_BYTES + NIBS_R_BYTES, salt, 16);
-        rain_hash_with_sbox_output(b1,
-                                   b1 + VOLERAINHASH_B_BYTES,
-                                   witness + NIBS_GAD2_H1_OFF / 8);
-
-        // Rain block B2 = ( salt[16..] | 0xff-pad ) XOR h1
-        const uint8_t* h1 = witness + NIBS_GAD2_H1_OFF / 8;
-        uint8_t* b2 = witness + NIBS_GAD2_B2_BIT_OFF / 8;
-        memset(b2, 0xff, VOLERAINHASH_B_BYTES);
-        memcpy(b2, salt + 16, VOLEMAYO_SALT_BYTES<P::secpar_v> - 16);
-        for (size_t i = 0; i < VOLERAINHASH_B_BYTES; i++) b2[i] ^= h1[i];
-        rain_hash_with_sbox_output(b2,
-                                   b2 + VOLERAINHASH_B_BYTES,
-                                   witness + NIBS_GADGET_2_OUT_OFF / 8);
-    #endif
-    
-}
-
-template <typename P>
-#if defined WITH_KECCAK
-void serialize_pk_sk(uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* packed_pk, 
-                    uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* witness, uint8_t* packed_sk) {
-#endif
-#if defined WITH_RAINHASH
-void serialize_pk_sk(uint8_t* expanded_pk, uint8_t* m_pub, uint8_t* packed_pk, uint8_t* s, uint8_t* skr_ptr,
-                    uint8_t* open, uint8_t* nonce, uint8_t* salt, uint8_t* witness, uint8_t* packed_sk) {
-#endif
-
-    #if defined WITH_KECCAK
-    serialize_pk<P>(packed_pk, expanded_pk, msg_hash);
-    #endif
-
-    #if defined WITH_RAINHASH
-    serialize_pk<P>(packed_pk, expanded_pk, m_pub);
-    #endif
-    
-    #if defined WITH_KECCAK
-    get_witness_nibs<P>(skr_ptr, ctx, salt, witness);
-    #endif
-    #if defined WITH_RAINHASH
-    get_witness_nibs<P>(skr_ptr, open, nonce, salt, witness);
-    #endif
-
-    serialize_sk<P>(packed_sk, packed_pk, s, witness);
-}
-
-
-template <typename P>
-#if defined WITH_KECCAK
-bool vole_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* msg_hash,
-                uint8_t* s, uint8_t* rand, uint8_t* salt, uint8_t* r_additional) {
-#endif
-
-#if defined WITH_RAINHASH
-bool vole_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len, 
-                uint8_t* expanded_pk, uint8_t* m_pub,
-                uint8_t* rain_rc, uint8_t* rain_mat,
-                uint8_t* s, uint8_t* skr_ptr, uint8_t* open, uint8_t* nonce, 
-                uint8_t* salt, uint8_t* r_additional) {
-#endif
+// Test helper: evaluate the circuit on the witness built from `in`, with bit
+// `flip_bit` of the full witness (NIBS part || MAYO s) flipped (SIZE_MAX: no
+// flip), and return how many constraints are unsatisfied. No VOLE
+// correlations are involved; only the constraint values are checked.
+template <typename P> size_t nibs_count_unsatisfied_t(const nibs_prover_inputs& in, size_t flip_bit)
+{
     using CP = P::CONSTS;
     using OC = P::OWF_CONSTS;
     constexpr auto S = P::secpar_v;
 
-    #if defined WITH_KECCAK
-    std::array<uint8_t, VOLEKECCAK_WITNESS_SIZE_BYTES<P::secpar_v>> witness {}; 
+    std::vector<uint8_t> packed_sk(FAEST_SECRET_KEY_BYTES<P>);
+    uint8_t* p = packed_sk.data();
+    memcpy(p, in.expanded_pk, VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<S>);
+    p += VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<S>;
+    memcpy(p, in.m_pub, HASHED_MSG_SIZE_BYTES<S>);
+    p += HASHED_MSG_SIZE_BYTES<S>;
+    nibs_build_witness<P>(in, p);
+    memcpy(p + NIBS_WITNESS_BYTES<P>, in.s, VOLEMAYO_S_BYTES<S>);
+    if (flip_bit != SIZE_MAX)
+    {
+        if (flip_bit >= OC::WITNESS_BITS)
+            return SIZE_MAX;
+        p[flip_bit / 8] ^= uint8_t(1u << (flip_bit % 8));
+    }
 
-    std::array<uint8_t, faest::VOLEMAYO_PUBLIC_SIZE_BYTES<S>> packed_pk;
-    std::array<uint8_t, faest::VOLEMAYO_SECRET_SIZE_BYTES<S> + VOLEKECCAK_SECRET_SIZE_BYTES<S>> packed_sk;
-    
-    serialize_pk_sk<P>(expanded_pk, msg_hash, (uint8_t*)packed_pk.data(), s, rand, salt, (uint8_t*)witness.data(), (uint8_t*)packed_sk.data());
-    #endif
+    auto sk = std::make_unique<faest::secret_key<P>>();
+    faest_unpack_secret_key<P>(sk.get(), packed_sk.data());
 
-    #if defined WITH_RAINHASH
-    std::array<uint8_t, VOLERAINHASH_WITNESS_SIZE_BYTES<P::secpar_v>> witness {}; 
+    std::vector<uint8_t> wit(CP::QUICKSILVER_ROWS_PADDED / 8 + 64, 0);
+    memcpy(wit.data(), &sk->witness[0], (OC::WITNESS_BITS + 7) / 8);
+    auto* macs = reinterpret_cast<faest::block_secpar<S>*>(aligned_alloc(
+        alignof(faest::block_secpar<S>), CP::QUICKSILVER_ROWS_PADDED * sizeof(faest::block_secpar<S>)));
+    memset(macs, 0, CP::QUICKSILVER_ROWS_PADDED * sizeof(faest::block_secpar<S>));
+    std::array<uint8_t, CP::QS::CHALLENGE_BYTES> chal2{};
+    for (size_t i = 0; i < chal2.size(); ++i)
+        chal2[i] = uint8_t(0x5a ^ i);
 
-    std::array<uint8_t, faest::VOLEMAYO_PUBLIC_SIZE_BYTES<S> + VOLERAINHASH_PUBLIC_SIZE_BYTES> packed_pk;
-    std::array<uint8_t, faest::VOLEMAYO_SECRET_SIZE_BYTES<S> + VOLERAINHASH_SECRET_SIZE_BYTES<S>> packed_sk;
-    
-    serialize_pk_sk<P>(expanded_pk, m_pub, (uint8_t*)packed_pk.data(), s, skr_ptr, open, nonce, salt, 
-            (uint8_t*)witness.data(), (uint8_t*)packed_sk.data());
-    #endif
+    faest::quicksilver_state<S, false, OC::QS_DEGREE> qs(wit.data(), macs, OC::OWF_NUM_CONSTRAINTS,
+                                                        chal2.data());
+    qs_soft_check = true;
+    qs_dbg_fails = 0;
+    faest::owf_constraints<P, false>(&qs, &sk->pk, chal2.data());
+    qs_soft_check = false;
+    free(macs);
+    return qs_dbg_fails;
+}
+
+template <typename P>
+bool vole_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_len,
+                const nibs_prover_inputs& in, const uint8_t* r_additional)
+{
+    using CP = P::CONSTS;
+    using OC = P::OWF_CONSTS;
+    constexpr auto S = P::secpar_v;
+
+    // packed sk = expanded pk || m || NIBS witness || s ; packed pk = expanded pk || m
+    std::vector<uint8_t> packed_sk(FAEST_SECRET_KEY_BYTES<P>);
+    {
+        uint8_t* p = packed_sk.data();
+        memcpy(p, in.expanded_pk, VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<S>);
+        p += VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<S>;
+        memcpy(p, in.m_pub, HASHED_MSG_SIZE_BYTES<S>);
+        p += HASHED_MSG_SIZE_BYTES<S>;
+        nibs_build_witness<P>(in, p);
+        p += NIBS_WITNESS_BYTES<P>;
+        memcpy(p, in.s, VOLEMAYO_S_BYTES<S>);
+    }
 
     // SHAKE hash state the we will keep reusing.
     faest::hash_state hasher;
@@ -269,9 +150,15 @@ bool vole_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_l
     block128 iv_pre;
     faest::block128 iv;
     std::array<uint8_t, sizeof(seed) + sizeof(iv)> seed_iv_pre;
+    // Hedged seed (as in FAEST): (seed, iv_pre) <- H_3(witness || fs_context || rho).
+    // rho must be fresh randomness; the witness term keeps distinct witnesses
+    // from ever sharing VOLE randomness even if rho is reused.
     hasher.init(S);
-    if (random_seed) // rho (NB: spec assumes rho is always given and \lambda bit long)
-            hasher.update(random_seed, random_seed_len);
+    hasher.update(packed_sk.data() + FAEST_PUBLIC_KEY_BYTES<P>,
+                  NIBS_WITNESS_BYTES<P> + VOLEMAYO_S_BYTES<S>);
+    hasher.update(r_additional, 32);
+    if (random_seed && random_seed_len)
+        hasher.update(random_seed, random_seed_len);
     hasher.update_byte(3);
     hasher.finalize(seed_iv_pre.data(), sizeof(seed_iv_pre));
     memcpy(&seed, seed_iv_pre.data(), sizeof(seed));
@@ -322,10 +209,9 @@ bool vole_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_l
     hasher.finalize(out.data(), CP::VOLE_CHECK::CHALLENGE_BYTES);
     memcpy(chal1.data(), out.data(), CP::VOLE_CHECK::CHALLENGE_BYTES);      // getting the challenge
     
-    faest::secret_key<P> sk;
-    static_assert(faest::FAEST_PUBLIC_KEY_BYTES<P> > 0);
-    uint8_t pk_packed[faest::FAEST_PUBLIC_KEY_BYTES<P>];
-    if (!faest_unpack_sk_and_get_pubkey<P>((uint8_t*)packed_pk.data(), (uint8_t*)packed_sk.data(), &sk))
+    auto sk_box = std::make_unique<faest::secret_key<P>>();
+    faest::secret_key<P>& sk = *sk_box;
+    if (!faest_unpack_secret_key<P>(&sk, packed_sk.data()))
         return false;
 
     // SHAKE hash state the we will keep reusing.
@@ -514,29 +400,14 @@ bool vole_prove(uint8_t* proof, const uint8_t* random_seed, size_t random_seed_l
 }
 
 template <typename P>
-#if defined WITH_KECCAK
-bool vole_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, uint8_t* msg_hash, uint8_t* r_additional)
-#endif
-#if defined WITH_RAINHASH
-bool vole_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk, 
-                uint8_t* msg_hash, uint8_t* rain_rc, uint8_t* rain_mat, uint8_t* r_additional)
-#endif
+bool vole_verify(const uint8_t* proof, size_t proof_size, const uint8_t* expanded_pk,
+                 const uint8_t* m_pub, const uint8_t* r_additional)
 {
     using CP = P::CONSTS;
     using OC = P::OWF_CONSTS;
     constexpr auto S = P::secpar_v;
-
-    #if defined WITH_KECCAK
-    std::array<uint8_t, faest::VOLEMAYO_PUBLIC_SIZE_BYTES<S>> packed_pk;
-    serialize_pk<P>((uint8_t*)packed_pk.data(), expanded_pk, msg_hash);
-    #endif
-
-    #if defined WITH_RAINHASH
-    uint8_t* packed_pk;
-    packed_pk = (uint8_t*)malloc(faest::VOLEMAYO_PUBLIC_SIZE_BYTES<S> + VOLERAINHASH_PUBLIC_SIZE_BYTES);
-    memset(packed_pk, 0x00, faest::VOLEMAYO_PUBLIC_SIZE_BYTES<S> + VOLERAINHASH_PUBLIC_SIZE_BYTES);
-    serialize_pk<P>(packed_pk, expanded_pk, msg_hash);
-    #endif
+    if (proof_size != VOLE_PROOF_BYTES<P>)
+        return false;
 
     // std::cout << "vole_verify!!! \n" << std::flush;
     
@@ -647,13 +518,11 @@ bool vole_verify(const uint8_t* proof, size_t proof_size, uint8_t* expanded_pk,
     faest::block_secpar<S> delta_block;
     memcpy(&delta_block, delta, sizeof(delta_block));
 
-    faest::public_key<P> pk;
-    #if defined WITH_KECCAK
-        faest_unpack_public_key(&pk, (uint8_t*)packed_pk.data());
-    #endif
-    #if defined WITH_RAINHASH
-        faest_unpack_public_key(&pk, packed_pk);
-    #endif
+    auto pk_box = std::make_unique<faest::public_key<P>>();
+    faest::public_key<P>& pk = *pk_box;
+    memset(&pk.msg[0], 0, sizeof(pk.msg));
+    memcpy(pk.mayo_expanded_pk, expanded_pk, VOLEMAYO_EXPANDED_PUBLIC_KEY_BYTES<S>);
+    memcpy(&pk.msg[0], m_pub, HASHED_MSG_SIZE_BYTES<S>);
 
     faest::quicksilver_state<S, true, OC::QS_DEGREE> qs(macs, OC::OWF_NUM_CONSTRAINTS, delta_block, chal2.data());
 

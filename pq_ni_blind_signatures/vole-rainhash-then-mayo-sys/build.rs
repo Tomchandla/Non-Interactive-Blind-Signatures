@@ -13,6 +13,10 @@ fn main() {
     println!("cargo:rustc-link-lib=consv_bs_rainhash");
 
     println!("cargo:rerun-if-changed=wrapper.h");
+    // Rebuild (and relink dependants) whenever the circuit sources change.
+    println!("cargo:rerun-if-changed=../vole/conservative_bs");
+    println!("cargo:rerun-if-changed=../vole/build_consv_bs_rainhash.sh");
+    println!("cargo:rerun-if-changed=../vole/meson.build");
 
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
