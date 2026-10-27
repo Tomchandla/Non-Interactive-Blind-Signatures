@@ -29,31 +29,30 @@ fn lowmc_is_an_invertible_keyed_permutation() {
     }
 }
 
-/// The receiver key and message derivations of the implemented sPRP
-/// instantiation, recomputed from raw LowMC calls.
+/// The receiver key and message derivations of the sPRP framework
+/// (Algorithm 1), recomputed from raw LowMC calls:
+/// sk_R = (K, s), pk_R = P_K(0||s), m = P_K(1||r), M = pk_R || r.
 #[test]
-fn sprp_derivations_match_the_specification() {
+fn sprp_derivations_match_algorithm_1() {
     for zk in [ZKType::FV1_128, ZKType::FV1_192, ZKType::FV1_256] {
         let bs = Nibs::setup(NibsParams::new(Framework::Sprp, MayoMode::Standard, zk));
         let level = zk.level();
         let n = lowmc::block_bytes(level);
         let (pk_r, sk_r) = bs.keygen_recipient();
-        assert!(sk_r.opening.is_empty());
-
-        let c0 = vec![0u8; n];
-        let mut c1 = vec![0u8; n];
-        c1[0] = 1;
-        let expect = [lowmc::encrypt(level, &sk_r.key, &c0), lowmc::encrypt(level, &sk_r.key, &c1)].concat();
-        assert_eq!(pk_r, expect, "pk_R = P_K(0||c0) || P_K(0||c1)");
+        let s = &sk_r.opening;
+        assert_eq!(s.len(), n);
+        assert_eq!(s.last().unwrap() & 0x80, 0, "s in {{0,1}}^(n-1): domain bit 0");
+        assert_eq!(pk_r, lowmc::encrypt(level, &sk_r.key, s), "pk_R = P_K(0||s)");
 
         let r = random_bytes(n);
         let mut pt = r.clone();
         *pt.last_mut().unwrap() |= 0x80; // domain bit 1 for messages
         assert_eq!(bs.derive_message(&sk_r.key, &r), lowmc::encrypt(level, &sk_r.key, &pt));
-        // and the domain bit separates messages from pk_R inputs: the signer
-        // cannot steer m onto either half of pk_R by choosing r = c0 or c1
-        assert_ne!(bs.derive_message(&sk_r.key, &c0), expect[..n].to_vec());
-        assert_ne!(bs.derive_message(&sk_r.key, &c1), expect[n..].to_vec());
+        // the domain bit separates messages from the pk_R input: choosing
+        // r = s does not make m equal to pk_R
+        assert_ne!(bs.derive_message(&sk_r.key, s), pk_r);
+
+        assert_eq!(bs.presig_message(&pk_r, &r), [pk_r.as_slice(), r.as_slice()].concat());
     }
 }
 

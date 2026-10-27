@@ -22,12 +22,14 @@ extern "C"
 
 enum
 {
-    // BCGY24 framework: pk_R = Rain(op || K), m = LowMC_K(r); MAYO with salt.
+    // BCGY24 framework: pk_R = Rain(op || K), m = LowMC_K(r); MAYO with salt
+    // on M = r || pk_R.
     NIBS_VARIANT_BCGY_MAYO = 0,
     // As above, but MAYO signs the Rain target directly (One-More-MAYO).
     NIBS_VARIANT_BCGY_OMM = 1,
-    // sPRP framework: pk_R = LowMC_K(0||c0) || LowMC_K(0||c1),
-    // m = LowMC_K(1||r); MAYO with salt.
+    // sPRP framework (Algorithm 1): sk_R = (K, s), pk_R = LowMC_K(0||s),
+    // m = LowMC_K(1||r); MAYO with salt on M = pk_R || r. s is passed in the
+    // op argument.
     NIBS_VARIANT_SPRP_MAYO = 2,
     // sPRP framework with One-More-MAYO.
     NIBS_VARIANT_SPRP_OMM = 3,
@@ -44,7 +46,7 @@ typedef struct
     size_t tau;               // VOLEitH repetition parameter
     size_t k_bytes;           // receiver LowMC key K
     size_t r_bytes;           // signer nonce r
-    size_t op_bytes;          // BCGY opening (0 for sPRP)
+    size_t op_bytes;          // BCGY opening op / sPRP randomness s
     size_t salt_bytes;        // MAYO salt in the witness (0 for One-More-MAYO)
     size_t pkr_bytes;         // receiver public key pk_R
     size_t m_bytes;           // public message m
@@ -86,7 +88,8 @@ void nibs_derive_pkr(unsigned variant, unsigned level, const uint8_t* K, const u
                      uint8_t* pkr);
 void nibs_derive_message(unsigned variant, unsigned level, const uint8_t* K, const uint8_t* r,
                          uint8_t* m);
-// MAYO target t = T(msg) for msg = r || pk_R (|| salt).
+// MAYO target t = T(msg) for msg = M (|| salt), M = r || pk_R (BCGY) or
+// pk_R || r (sPRP).
 void nibs_target(unsigned level, const uint8_t* msg, size_t msg_len, uint8_t* t, size_t t_len);
 
 // One RainHash-512 call (input 64 bytes; first outlen bytes of the output).

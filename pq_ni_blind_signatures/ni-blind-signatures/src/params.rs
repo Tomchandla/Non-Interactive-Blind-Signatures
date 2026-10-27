@@ -9,18 +9,17 @@ pub enum Framework {
     /// Baldimtsi et al. (ASIACRYPT'24) generic construction:
     /// `pk_R = RainHash(op || K)`, `m = LowMC_K(r)`.
     Bcgy,
-    /// sPRP framework (Sec. 5.2 of the paper), with the fixed-input key
-    /// commitment `pk_R = LowMC_K(0||c0) || LowMC_K(0||c1)` and
-    /// `m = LowMC_K(1||r)`.
+    /// sPRP framework (Algorithm 1 of the paper): `sk_R = (K, s)`,
+    /// `pk_R = LowMC_K(0||s)`, `m = LowMC_K(1||r)`, MAYO signs `pk_R || r`.
     Sprp,
 }
 
-/// How MAYO signs `M = r || pk_R`.
+/// How MAYO signs `M` (`r || pk_R` for BCGY, `pk_R || r` for sPRP).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MayoMode {
-    /// MAYO with salt: target `T(r || pk_R || salt)`; presignature `s || salt`.
+    /// MAYO with salt: target `T(M || salt)`; presignature `s || salt`.
     Standard,
-    /// One-More-MAYO (Baum et al., USENIX'26): preimage of `T(r || pk_R)`, no
+    /// One-More-MAYO (Baum et al., USENIX'26): preimage of `T(M)`, no
     /// salt. Security rests on one-more preimage resistance of the MAYO map.
     OneMore,
 }

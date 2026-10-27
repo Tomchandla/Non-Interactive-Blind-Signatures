@@ -6,8 +6,8 @@ Rust implementation of the non-interactive blind signature: KeyGen_S, KeyGen_R, 
 |---|---|---|---|
 | `BCGY+MAYO` | Rain(op ‖ K) | LowMC_K(r) | salted MAYO on r ‖ pk_R |
 | `BCGY+OMM` | Rain(op ‖ K) | LowMC_K(r) | One-More-MAYO preimage of T(r ‖ pk_R) |
-| `sPRP+MAYO` | LowMC_K(0‖c0) ‖ LowMC_K(0‖c1) | LowMC_K(1‖r) | salted MAYO on r ‖ pk_R |
-| `sPRP+OMM` | LowMC_K(0‖c0) ‖ LowMC_K(0‖c1) | LowMC_K(1‖r) | One-More-MAYO preimage of T(r ‖ pk_R) |
+| `sPRP+MAYO` | LowMC_K(0‖s) | LowMC_K(1‖r) | salted MAYO on pk_R ‖ r |
+| `sPRP+OMM` | LowMC_K(0‖s) | LowMC_K(1‖r) | One-More-MAYO preimage of T(pk_R ‖ r) |
 
 ```rust
 use ni_blind_signatures::{Framework, MayoMode, Nibs, NibsParams, ZKType};

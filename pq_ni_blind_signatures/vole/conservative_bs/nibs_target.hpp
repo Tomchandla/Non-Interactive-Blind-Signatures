@@ -100,17 +100,17 @@ inline void nibs_bcgy_pkr(unsigned level, const uint8_t* op, const uint8_t* K, u
     memcpy(pkr, out, 2 * lb);
 }
 
-// sPRP receiver key: pk_R = P_K(0||c0) || P_K(0||c1) with c0 = 0, c1 = 1 (the
-// top bit of every pk input is the domain bit 0). states (optional) receives
-// both LowMC witnesses back to back.
-inline void nibs_sprp_pkr(unsigned level, const uint8_t* K, uint8_t* pkr, uint8_t* states)
+// sPRP receiver key (Algorithm 1): pk_R = P_K(0||s), one lambda-bit block.
+// The top bit of the block is the domain bit 0, so only the low lambda-1 bits
+// of s are used. states (optional) receives the LowMC witness.
+inline void nibs_sprp_pkr(unsigned level, const uint8_t* s, const uint8_t* K, uint8_t* pkr,
+                          uint8_t* states)
 {
     const std::size_t lb = nibs_lowmc_block_bytes(level);
-    const std::size_t st = nibs_lowmc_rounds(level) * lb;
-    uint8_t c[32] = {0};
-    nibs_lowmc_witness_states(level, K, c, states, pkr);
-    c[0] = 1;
-    nibs_lowmc_witness_states(level, K, c, states ? states + st : nullptr, pkr + lb);
+    uint8_t pt[32];
+    memcpy(pt, s, lb);
+    pt[lb - 1] &= 0x7f;
+    nibs_lowmc_witness_states(level, K, pt, states, pkr);
 }
 
 // Message derivation. BCGY: m = LowMC_K(r). sPRP: m = LowMC_K(r with its top

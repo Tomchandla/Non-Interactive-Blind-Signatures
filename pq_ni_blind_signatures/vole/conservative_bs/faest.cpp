@@ -146,7 +146,7 @@ void nibs_derive_pkr(unsigned variant, unsigned level, const uint8_t* K, const u
                      uint8_t* pkr)
 {
     if (is_sprp(variant))
-        nibs_sprp_pkr(level, K, pkr, nullptr);
+        nibs_sprp_pkr(level, op, K, pkr, nullptr);
     else
         nibs_bcgy_pkr(level, op, K, pkr, nullptr);
 }

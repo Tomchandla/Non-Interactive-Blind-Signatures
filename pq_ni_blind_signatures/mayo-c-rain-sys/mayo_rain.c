@@ -2,7 +2,8 @@
 //
 // MAYO signing for NIBS presignatures.
 //
-// The message signed is M = r || pk_R (fixed length per level/variant). The
+// The message signed is M = r || pk_R (BCGY) or pk_R || r (sPRP), of fixed
+// length per level/variant. The
 // MAYO target is derived with the VOLEitH-friendly Rain mode T implemented in
 // the proof library (nibs_target), never with SHAKE, because T has to be
 // re-proved inside the VOLEitH circuit.
@@ -27,7 +28,7 @@
 #include <faest.h>
 #include "mayo_rain.h"
 
-#define NIBS_MSG_MAX 128 // r (<= 32) || pk_R (<= 64)
+#define NIBS_MSG_MAX 128 // r (<= 32) and pk_R (<= 64)
 
 int mayo_nibs_level(const mayo_params_t *p)
 {

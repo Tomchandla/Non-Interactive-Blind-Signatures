@@ -2,7 +2,7 @@ use super::{Nibs, NonceType, PresignatureType, RecipientPkType, SkType};
 use rand::Rng;
 
 impl Nibs {
-    /// Issue: fresh nonce r and a MAYO presignature on r || pk_R.
+    /// Issue: fresh nonce r and a MAYO presignature on M (see `presig_message`).
     ///
     /// For the sPRP framework the top bit of r is the domain-separation bit
     /// of the message input 1||r, so the signer samples it as 0 (only the

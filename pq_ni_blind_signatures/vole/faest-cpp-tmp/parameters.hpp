@@ -357,7 +357,7 @@ constexpr bool is_owf_with_rainhash_then_mayo(owf o)
     const auto a = std::to_underlying(o) >> owf_algo_shift;
     return a >= owf_algo_rainhash_then_mayo && a <= owf_algo_nibs_sprp_omm;
 }
-// pk_R = P_K(0||c0) || P_K(0||c1) (sPRP framework) instead of RainHash(op||K)
+// pk_R = P_K(0||s) (sPRP framework, Algorithm 1) instead of RainHash(op||K)
 constexpr bool nibs_is_sprp(owf o)
 {
     const auto a = std::to_underlying(o) >> owf_algo_shift;

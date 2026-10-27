@@ -242,7 +242,7 @@ static void enc_constraints_mayo(QS* qs_state, const public_key<P>* pk, unsigned
     qs_state->add_constraint(u + t_embedded);
 }
 
-// The full NIBS relation R((vk, m), (presig, r, K, op/-, salt/-)).
+// The full NIBS relation R((vk, m), (presig, r, K, op/s, salt/-)).
 template <typename QS, typename P, owf O>
 static void enc_constraints(QS* qs, const public_key<P>* pk, unsigned char* chall2)
 {
@@ -266,13 +266,13 @@ static void enc_constraints(QS* qs, const public_key<P>* pk, unsigned char* chal
     nibs_wires<QS> pkr;
     if constexpr (LAY::SPRP)
     {
+        // pk_R = LowMC_K(0 || s): the witness slot holds s with its top bit,
+        // the domain bit, constrained to 0 (Algorithm 1, KeyGen_R).
         qs_dbg_region = "lowmc_pk";
-        uint8_t c[N / 8] = {0};
-        nibs_wires<QS> pk0 = nibs_lowmc_gadget<QS, LEVEL>(qs, K, nibs_const_wires(qs, c, N), LAY::LOWMC_PK0_OFF);
-        c[0] = 1;
-        nibs_wires<QS> pk1 = nibs_lowmc_gadget<QS, LEVEL>(qs, K, nibs_const_wires(qs, c, N), LAY::LOWMC_PK1_OFF);
-        pkr = pk0;
-        pkr.insert(pkr.end(), pk1.begin(), pk1.end());
+        const nibs_wires<QS> s = nibs_witness_wires(qs, LAY::OP_OFF, N);
+        const uint8_t zero = 0;
+        nibs_assert_bits_equal_const(qs, &s[N - 1], &zero, 1);
+        pkr = nibs_lowmc_gadget<QS, LEVEL>(qs, K, s, LAY::LOWMC_PK_OFF);
     }
     else
     {
@@ -287,12 +287,14 @@ static void enc_constraints(QS* qs, const public_key<P>* pk, unsigned char* chal
         pkr.assign(c.begin(), c.begin() + 8 * LAY::PKR_BYTES);
     }
 
-    // t = T(r || pk_R || salt): the signer's nonce opens the first Rain block,
-    // so no chaining value of T can be precomputed before the nonce is known
-    // (see nibs_layout.hpp).
+    // t = T(M || salt) with M = r || pk_R (BCGY) or pk_R || r (sPRP). In both
+    // cases the signer's nonce lies in the first Rain block, so no chaining
+    // value of T can be precomputed before the nonce is known (see
+    // nibs_layout.hpp).
     qs_dbg_region = "rain_target";
-    nibs_wires<QS> msg = r;
-    msg.insert(msg.end(), pkr.begin(), pkr.end());
+    nibs_wires<QS> msg = LAY::NONCE_FIRST ? r : pkr;
+    const nibs_wires<QS>& second = LAY::NONCE_FIRST ? pkr : r;
+    msg.insert(msg.end(), second.begin(), second.end());
     if constexpr (!LAY::OMM)
     {
         const nibs_wires<QS> salt = nibs_witness_wires(qs, LAY::SALT_OFF, 8 * LAY::SALT_BYTES);

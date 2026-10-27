@@ -36,7 +36,7 @@ struct nibs_prover_inputs
     const uint8_t* m_pub;       // public message m = LowMC_K(.) (statement)
     const uint8_t* s;           // MAYO preimage, encoded (without salt)
     const uint8_t* K;           // receiver LowMC key
-    const uint8_t* op;          // BCGY commitment opening (ignored for sPRP)
+    const uint8_t* op;          // BCGY commitment opening op, or sPRP randomness s
     const uint8_t* nonce;       // signer nonce r
     const uint8_t* salt;        // MAYO salt (ignored for One-More-MAYO)
 };
@@ -51,8 +51,9 @@ template <typename P> void nibs_build_witness(const nibs_prover_inputs& in, uint
     memset(w, 0, LAY::WITNESS_BYTES);
     memcpy(w + LAY::K_OFF / 8, in.K, LAY::K_BYTES);
     memcpy(w + LAY::R_OFF / 8, in.nonce, LAY::R_BYTES);
-    if constexpr (LAY::OP_BYTES)
-        memcpy(w + LAY::OP_OFF / 8, in.op, LAY::OP_BYTES);
+    memcpy(w + LAY::OP_OFF / 8, in.op, LAY::OP_BYTES);
+    if constexpr (LAY::SPRP)
+        w[LAY::OP_OFF / 8 + LAY::OP_BYTES - 1] &= 0x7f; // s: domain bit 0
     if constexpr (LAY::SALT_BYTES)
         memcpy(w + LAY::SALT_OFF / 8, in.salt, LAY::SALT_BYTES);
 
@@ -61,13 +62,21 @@ template <typename P> void nibs_build_witness(const nibs_prover_inputs& in, uint
 
     uint8_t pkr[64];
     if constexpr (LAY::SPRP)
-        nibs_sprp_pkr(LEVEL, in.K, pkr, w + LAY::LOWMC_PK0_OFF / 8);
+        nibs_sprp_pkr(LEVEL, in.op, in.K, pkr, w + LAY::LOWMC_PK_OFF / 8);
     else
         nibs_bcgy_pkr(LEVEL, in.op, in.K, pkr, w + LAY::GADA_OFF / 8);
 
     uint8_t msg[LAY::T_MSG_BYTES];
-    memcpy(msg, in.nonce, LAY::R_BYTES);
-    memcpy(msg + LAY::R_BYTES, pkr, LAY::PKR_BYTES);
+    if constexpr (LAY::NONCE_FIRST)
+    {
+        memcpy(msg, in.nonce, LAY::R_BYTES);
+        memcpy(msg + LAY::R_BYTES, pkr, LAY::PKR_BYTES);
+    }
+    else
+    {
+        memcpy(msg, pkr, LAY::PKR_BYTES);
+        memcpy(msg + LAY::PKR_BYTES, in.nonce, LAY::R_BYTES);
+    }
     if constexpr (LAY::SALT_BYTES)
         memcpy(msg + LAY::R_BYTES + LAY::PKR_BYTES, in.salt, LAY::SALT_BYTES);
     uint8_t t[LAY::T_BYTES];

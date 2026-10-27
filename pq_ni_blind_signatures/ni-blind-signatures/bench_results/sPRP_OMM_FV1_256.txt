@@ -2,19 +2,19 @@
 │ NIBS sPRP+OMM FV1_256  (LowMC + MAYO + RainHash + VOLEitH) │
 ├────────────────────────────────────────────────────────────┤
 │ Phase                               mean over 50 runs      │
-│   KeyGen_S                                     18.073 ms │
-│   KeyGen_R                                      0.097 ms │
-│   Issue                                        35.802 ms │
-│   Obtain (prove)                              184.162 ms │
-│   Verify                                      157.499 ms │
+│   KeyGen_S                                     17.563 ms │
+│   KeyGen_R                                      0.052 ms │
+│   Issue                                        35.153 ms │
+│   Obtain (prove)                              172.833 ms │
+│   Verify                                      146.067 ms │
 ├────────────────────────────────────────────────────────────┤
 │   presignature |sigma_pre|           0.902 KB       924 B │
-│   signature |sigma|                137.984 KB    141296 B │
-│   receiver pk_R                      0.062 KB        64 B │
+│   signature |sigma|                 97.984 KB    100336 B │
+│   receiver pk_R                      0.031 KB        32 B │
 │   message m                          0.031 KB        32 B │
 │   nonce r                            0.031 KB        32 B │
 ├────────────────────────────────────────────────────────────┤
-│   witness 32224 bits = 24832 NIBS + 7392 MAYO s            │
-│   3 LowMC + 4 Rain gadgets (4 for the target), 10353 constraints │
+│   witness 21984 bits = 14592 NIBS + 7392 MAYO s            │
+│   2 LowMC + 2 Rain gadgets (2 for the target), 6970 constraints │
 │   VOLEitH tau = 32                                         │
 └────────────────────────────────────────────────────────────┘

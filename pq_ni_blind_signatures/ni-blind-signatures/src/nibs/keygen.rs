@@ -8,11 +8,17 @@ impl Nibs {
         self.mayo.keygen()
     }
 
-    /// KeyGen_R: sample K (and op for BCGY) and derive pk_R.
+    /// KeyGen_R: sample K and op (BCGY) or K and s (sPRP), and derive pk_R.
+    ///
+    /// For the sPRP framework (Algorithm 1), s is drawn from {0,1}^{lambda-1}:
+    /// the top bit of the block is the domain bit 0 of the input 0||s.
     pub fn keygen_recipient(&self) -> (RecipientPkType, RecipientSk) {
         let mut rng = rand::rng();
         let key: Vec<u8> = (0..self.info.k_bytes).map(|_| rng.random()).collect();
-        let opening: Vec<u8> = (0..self.info.op_bytes).map(|_| rng.random()).collect();
+        let mut opening: Vec<u8> = (0..self.info.op_bytes).map(|_| rng.random()).collect();
+        if self.params.is_sprp() {
+            *opening.last_mut().unwrap() &= 0x7f;
+        }
         let sk = RecipientSk { key, opening };
         (self.derive_pkr(&sk), sk)
     }
@@ -21,9 +27,7 @@ impl Nibs {
     pub fn derive_pkr(&self, sk: &RecipientSk) -> RecipientPkType {
         assert_eq!(sk.key.len(), self.info.k_bytes);
         assert_eq!(sk.opening.len(), self.info.op_bytes);
-        let dummy = [0u8; 32];
-        let op: &[u8] = if sk.opening.is_empty() { &dummy } else { &sk.opening };
-        lowmc::derive_pkr(self.params.variant_id(), self.level(), &sk.key, op, self.info.pkr_bytes)
+        lowmc::derive_pkr(self.params.variant_id(), self.level(), &sk.key, &sk.opening, self.info.pkr_bytes)
     }
 
     /// m from K and the nonce (the same function the circuit proves).

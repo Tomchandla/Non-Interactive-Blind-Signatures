@@ -173,31 +173,37 @@ fn reported_sizes_match_the_layout() {
         assert_eq!(i.k_bytes, lb);
         assert_eq!(i.r_bytes, lb);
         assert_eq!(i.m_bytes, lb);
-        assert_eq!(i.pkr_bytes, 2 * lb);
-        assert_eq!(i.op_bytes, if p.is_sprp() { 0 } else { lb });
+        assert_eq!(i.pkr_bytes, if p.is_sprp() { lb } else { 2 * lb });
+        assert_eq!(i.op_bytes, lb);
         assert_eq!(i.salt_bytes, if p.is_one_more() { 0 } else { bs.mayo.mayo_params.salt_bytes });
         assert_eq!(i.witness_bits, i.nibs_witness_bits + i.mayo_s_bits);
-        assert_eq!(i.lowmc_gadgets, if p.is_sprp() { 3 } else { 1 });
+        assert_eq!(i.lowmc_gadgets, if p.is_sprp() { 2 } else { 1 });
         assert_eq!(i.rain_gadgets, i.target_blocks + if p.is_sprp() { 0 } else { 1 });
     }
 }
 
-/// The MAYO message is encoded nonce first, M = r || pk_R, so the first Rain
-/// block of the target hash always contains the signer's fresh nonce. (With
-/// pk_R first, the whole first block is receiver-chosen at level 5 and two
-/// target chains could be merged by a 2^{(lambda+64)/2} birthday search that
-/// the receiver runs before asking for a presignature.)
+/// The MAYO message is M = r || pk_R for BCGY and pk_R || r for sPRP
+/// (Algorithm 1). Either way the nonce lies entirely in the first Rain block
+/// of the target hash, so the receiver cannot precompute any chaining value.
+/// (With BCGY and pk_R first, the 2 lambda-bit pk_R fills the whole first
+/// block at level 5 and two target chains could be merged by a
+/// 2^{(lambda+64)/2} birthday search run before asking for a presignature.)
 #[test]
-fn presignature_message_starts_with_the_nonce() {
+fn presignature_message_puts_the_nonce_in_the_first_rain_block() {
     for zk in [ZKType::FV1_128, ZKType::FV1_192, ZKType::FV1_256] {
         for p in NibsParams::variants(zk) {
             let bs = Nibs::setup(p);
             let (pk_r, _) = bs.keygen_recipient();
             let nonce: Vec<u8> = (0..bs.info.r_bytes as u8).collect();
             let msg = bs.presig_message(&pk_r, &nonce);
-            assert_eq!(&msg[..nonce.len()], &nonce[..], "[{p}]");
-            assert_eq!(&msg[nonce.len()..], &pk_r[..], "[{p}]");
-            assert!(nonce.len() <= 64, "nonce fits the first Rain block");
+            let expect = if p.is_sprp() {
+                [pk_r.as_slice(), nonce.as_slice()].concat()
+            } else {
+                [nonce.as_slice(), pk_r.as_slice()].concat()
+            };
+            assert_eq!(msg, expect, "[{p}]");
+            let end = msg.windows(nonce.len()).position(|w| w == nonce.as_slice()).unwrap() + nonce.len();
+            assert!(end <= 64, "[{p}] nonce ends at byte {end}, past the first Rain block");
         }
     }
 }

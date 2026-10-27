@@ -2,11 +2,11 @@
 │ NIBS BCGY+MAYO SV1_256  (LowMC + MAYO + RainHash + VOLEitH) │
 ├────────────────────────────────────────────────────────────┤
 │ Phase                               mean over 50 runs      │
-│   KeyGen_S                                     17.857 ms │
-│   KeyGen_R                                      0.271 ms │
-│   Issue                                        35.945 ms │
-│   Obtain (prove)                              300.158 ms │
-│   Verify                                      273.745 ms │
+│   KeyGen_S                                     17.536 ms │
+│   KeyGen_R                                      0.268 ms │
+│   Issue                                        36.027 ms │
+│   Obtain (prove)                              297.531 ms │
+│   Verify                                      272.403 ms │
 ├────────────────────────────────────────────────────────────┤
 │   presignature |sigma_pre|           0.941 KB       964 B │
 │   signature |sigma|                 91.914 KB     94120 B │

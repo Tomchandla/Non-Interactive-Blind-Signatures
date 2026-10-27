@@ -4,11 +4,12 @@
 //! ```text
 //! Setup      : pick NibsParams (framework, MAYO mode, VOLEitH set)
 //! KeyGenS    : (vk, sk) <- MAYO.KeyGen
-//! KeyGenR    : K, op <-$ ; pk_R = Rain(op||K)            (BCGY)
-//!                         pk_R = P_K(0||c0) || P_K(0||c1) (sPRP)
-//! Issue      : r <-$ ; presig <- MAYO.Sign(sk, r || pk_R)  (salted or One-More)
+//! KeyGenR    : K, op <-$ ; pk_R = Rain(op||K)             (BCGY)
+//!              K, s  <-$ ; pk_R = P_K(0||s)               (sPRP, Algorithm 1)
+//! Issue      : r <-$ ; presig <- MAYO.Sign(sk, M)        (salted or One-More)
+//!              M = r || pk_R (BCGY), pk_R || r (sPRP)
 //! Obtain     : check presig; m = P_K(r) (BCGY) / P_K(1||r) (sPRP);
-//!              sigma <- VOLEitH.Prove((vk, m), (presig, r, K, op))
+//!              sigma <- VOLEitH.Prove((vk, m), (presig, r, K, op/s))
 //! Verify     : VOLEitH.Verify((vk, m), sigma)
 //! ```
 //!
@@ -40,7 +41,8 @@ pub type MessageType = Vec<u8>;
 pub struct RecipientSk {
     /// LowMC key K (lambda bits)
     pub key: Vec<u8>,
-    /// commitment opening op (lambda bits; empty for the sPRP framework)
+    /// BCGY: commitment opening op. sPRP: receiver randomness s, with its
+    /// top (domain) bit 0. lambda bits in both cases.
     pub opening: Vec<u8>,
 }
 
@@ -90,13 +92,18 @@ impl Nibs {
         self.mayo.expand_pk(pk)
     }
 
-    /// The MAYO message `M = r || pk_R` (the pair (pk_R, r) of the paper,
-    /// encoded nonce first so that the first Rain block of the target hash
-    /// always contains the signer's fresh randomness).
+    /// The MAYO message M. sPRP: `pk_R || r`, as in Algorithm 1. BCGY:
+    /// `r || pk_R`, nonce first because pk_R (2 lambda bits) fills the whole
+    /// first Rain block of the target hash at level 5. In both cases the
+    /// first Rain block contains the signer's fresh nonce.
     pub fn presig_message(&self, pk_r: &RecipientPkType, nonce: &NonceType) -> Vec<u8> {
         assert_eq!(pk_r.len(), self.info.pkr_bytes);
         assert_eq!(nonce.len(), self.info.r_bytes);
-        [nonce.as_slice(), pk_r.as_slice()].concat()
+        if self.params.is_sprp() {
+            [pk_r.as_slice(), nonce.as_slice()].concat()
+        } else {
+            [nonce.as_slice(), pk_r.as_slice()].concat()
+        }
     }
 
     /// Fiat–Shamir context binding the instance and the statement (vk, m).

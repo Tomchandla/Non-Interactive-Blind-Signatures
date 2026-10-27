@@ -47,7 +47,7 @@ impl MAYO {
         unsafe { crate::mayo_nibs_level(&self.mayo_params.mayo_param_set) as u32 }
     }
 
-    /// Presignature on the fixed-length NIBS message `m = r || pk_R`.
+    /// Presignature on the fixed-length NIBS message `m` (`r || pk_R` or `pk_R || r`).
     ///
     /// * `omm = false`: standard MAYO with the Rain target `T(m || salt)`;
     ///   the output is `s || salt`.
