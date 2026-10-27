@@ -1,18 +1,18 @@
 # NIBS protocol layer
 
-Rust implementation of the non-interactive blind signature: KeyGen_S, KeyGen_R, Issue, Obtain and Verify. It covers four variants, at NIST levels 1, 3 and 5, with all twelve VOLEitH parameter sets:
+Rust implementation of the non-interactive blind signature: KeyGen_S, KeyGen_R, Issue, Obtain and Verify. It covers both frameworks, at NIST levels 1, 3 and 5, with all twelve VOLEitH parameter sets:
 
-| Variant | pk_R | message | presignature |
+| Framework | pk_R | message m | presignature |
 |---|---|---|---|
-| `BCGY+MAYO` | Rain(op ‖ K) | LowMC_K(r) | salted MAYO on r ‖ pk_R |
-| `BCGY+OMM` | Rain(op ‖ K) | LowMC_K(r) | One-More-MAYO preimage of T(r ‖ pk_R) |
-| `sPRP+MAYO` | LowMC_K(0‖s) | LowMC_K(1‖r) | salted MAYO on pk_R ‖ r |
-| `sPRP+OMM` | LowMC_K(0‖s) | LowMC_K(1‖r) | One-More-MAYO preimage of T(pk_R ‖ r) |
+| `BCGY` | ⌊RH(op ‖ K ‖ fill)⌋_2λ | LowMC_K(r) | salted MAYO on M = r ‖ pk_R |
+| `sPRP` | LowMC_K(0 ‖ s) | LowMC_K(1 ‖ r) | salted MAYO on M = r ‖ pk_R |
+
+In the sPRP framework (Algorithm 1), s and r are drawn from {0,1}^(λ−1); the top bit of the λ-bit block is the domain bit.
 
 ```rust
-use ni_blind_signatures::{Framework, MayoMode, Nibs, NibsParams, ZKType};
+use ni_blind_signatures::{Framework, Nibs, NibsParams, ZKType};
 
-let bs = Nibs::setup(NibsParams::new(Framework::Sprp, MayoMode::OneMore, ZKType::SV1_128));
+let bs = Nibs::setup(NibsParams::new(Framework::Sprp, ZKType::SV1_128));
 let (pk, sk) = bs.keygen_signer();
 let epk = bs.expand_pk(&pk);
 let (pk_r, sk_r) = bs.keygen_recipient();
@@ -21,7 +21,7 @@ let (m, sig) = bs.obtain(&pk, &epk, &sk_r, &presig, &nonce).expect("valid presig
 assert!(bs.verify(&pk, &epk, &m, &sig));
 ```
 
-Layout: `src/params.rs` (variants and parameter sets), `src/nibs/` (the five algorithms), `src/zk.rs` (the VOLEitH FFI). Design notes are in [`../docs/NOTES.md`](../docs/NOTES.md).
+Layout: `src/params.rs` (frameworks and parameter sets), `src/nibs/` (the five algorithms), `src/zk.rs` (the VOLEitH FFI). The witness layout and target-hash mode are documented in [`../vole/conservative_bs/nibs_layout.hpp`](../vole/conservative_bs/nibs_layout.hpp).
 
 ## Tests
 
@@ -30,7 +30,7 @@ The MAYO code needs a larger stack than Rust's default:
 ```bash
 export RUST_MIN_STACK=8388608
 cargo test --release --test nibs --test sprp --test soundness
-NIBS_TEST_ALL=1 cargo test --release --test nibs          # round trip on all 48 instances
+NIBS_TEST_ALL=1 cargo test --release --test nibs          # round trip on all 24 instances
 NIBS_SOUNDNESS_EXHAUSTIVE=1 cargo test --release --test soundness -- --ignored   # flip every witness bit (level 1, slow)
 ```
 

@@ -1,14 +1,14 @@
-// NIBS benchmarks across variants and NIST levels.
+// NIBS benchmarks across both frameworks and all NIST levels.
 //
 //   RUST_MIN_STACK=8388608 cargo bench --bench nibs
 //
 // Environment knobs (all optional):
 //   NIBS_BENCH_ITERS=50              timed runs per phase (mean is reported)
 //   NIBS_BENCH_ZK=SV1_128,FV1_192    VOLEitH sets (default: all 12)
-//   NIBS_BENCH_VARIANTS=BCGY+MAYO,sPRP+OMM   (default: all 4)
+//   NIBS_BENCH_VARIANTS=BCGY,sPRP    frameworks (default: both)
 //   NIBS_BENCH_CRITERION=1           also run Criterion on obtain/verify
 //
-// Output: one box per instance on stdout, bench_results/<variant>_<zk>.txt,
+// Output: one box per instance on stdout, bench_results/<framework>_<zk>.txt,
 // and bench_results/summary.md / summary.csv with one row per instance.
 
 use criterion::{criterion_group, criterion_main, Criterion};

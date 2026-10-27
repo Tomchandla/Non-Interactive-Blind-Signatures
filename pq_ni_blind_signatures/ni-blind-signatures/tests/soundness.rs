@@ -3,7 +3,7 @@
 // single flipped witness bit do not.
 //
 //   RUST_MIN_STACK=8388608 cargo test --release --test soundness -- --nocapture
-//   NIBS_SOUNDNESS_EXHAUSTIVE=1 ... flips every witness bit of BCGY+MAYO SV1_128
+//   NIBS_SOUNDNESS_EXHAUSTIVE=1 ... flips every witness bit of both frameworks at SV1_128
 
 use ni_blind_signatures::zk::{count_unsatisfied, Witness};
 use ni_blind_signatures::{Nibs, NibsParams, RecipientSk, ZKType};

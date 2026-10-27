@@ -1,0 +1,20 @@
+┌────────────────────────────────────────────────────────────┐
+│ NIBS sPRP SV1_256  (LowMC + MAYO + RainHash + VOLEitH)     │
+├────────────────────────────────────────────────────────────┤
+│ Phase                               mean over 50 runs      │
+│   KeyGen_S                                     16.815 ms │
+│   KeyGen_R                                      0.047 ms │
+│   Issue                                        33.519 ms │
+│   Obtain (prove)                              270.322 ms │
+│   Verify                                      247.245 ms │
+├────────────────────────────────────────────────────────────┤
+│   presignature |sigma_pre|           0.941 KB       964 B │
+│   signature |sigma|                 82.539 KB     84520 B │
+│   receiver pk_R                      0.031 KB        32 B │
+│   message m                          0.031 KB        32 B │
+│   nonce r                            0.031 KB        32 B │
+├────────────────────────────────────────────────────────────┤
+│   witness 29472 bits = 22080 NIBS + 7392 MAYO s            │
+│   2 LowMC + 4 Rain gadgets (4 for the target), 7026 constraints │
+│   VOLEitH tau = 20                                         │
+└────────────────────────────────────────────────────────────┘

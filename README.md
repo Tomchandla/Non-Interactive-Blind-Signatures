@@ -2,35 +2,43 @@
 
 ## Overview
 
-This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) — itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) — with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. The implementation extends the interactive blind signature of Baum, Beckmann, Beullens, Mukherjee and Rechberger ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing in the interactive setting.
+This project instantiates the generic non-interactive blind signature (NIBS) framework of Baldimtsi, Cheng, Goyal and Yadav ([BCGY24](https://eprint.iacr.org/2024/037)) — itself a strengthening of the notion introduced by Hanzlik ([Han23](https://eprint.iacr.org/2023/077)) — with post-quantum primitives: **MAYO** as the digital signature scheme, **VOLE-in-the-Head** (FAEST) as the NIZKPoK, **LowMC** as the PRF, and a **RainHash**-based commitment. A second framework replaces the PRF and the commitment with a single strong pseudorandom permutation, also instantiated with LowMC. The implementation extends the interactive blind signature of Baum, Beckmann, Beullens, Mukherjee and Rechberger ([BBBMR26](https://eprint.iacr.org/2026/109.pdf)), which combines the same MAYO/FAEST pairing in the interactive setting.
 
 **Motivation.** Only one prior post-quantum NIBS satisfies the strong blindness notions of [BCGY24]: the lattice construction of Baldimtsi, Goyal and Yadav ([BGY24](https://eprint.iacr.org/2025/1771.pdf)), whose single (unbatched) signature is conservatively estimated at 306–308 KB. This work asks whether a multivariate + VOLEitH instantiation closes the gap between the theoretical framework and a deployable scheme.
 
 ## Contributions
 
-1. **An efficient post-quantum NIBS instantiation.** Signatures of **23.69 KB** at `SV1_128`, a >12× reduction over the state-of-the-art lattice NIBS, under UOV/WMQ and LowMC assumptions rather than lattice assumptions.
+1. **An efficient post-quantum NIBS instantiation.** Signatures of **20.66 KB** (BCGY framework) and **14.62 KB** (sPRP framework) at `SV1_128`, a 14–21× reduction over the state-of-the-art lattice NIBS, under UOV/WMQ and LowMC assumptions rather than lattice assumptions.
 2. **A simplified generic framework.** The framework of [BCGY24] requires a signature scheme, a NIZKPoK, a PRF *and* a commitment scheme. We show the PRF and the commitment can be collapsed into a single **strong pseudorandom permutation** (sPRP), with proof sketches for one-more unforgeability, strong receiver blindness and strong nonce blindness.
+
+Both frameworks are implemented at NIST levels 1, 3 and 5:
+
+| Framework | Receiver key pk_R | Message m | Presignature |
+|---|---|---|---|
+| BCGY | ⌊RH(op ‖ K ‖ fill)⌋_2λ | LowMC_K(r) | salted MAYO on M = r ‖ pk_R |
+| sPRP | LowMC_K(0 ‖ s) | LowMC_K(1 ‖ r) | salted MAYO on M = r ‖ pk_R |
 
 ## Project Structure
 
 ```
 Non-Interactive-Blind-Signatures/
-└── pq_blind_signatures/
-    ├── blind-signatures-conservative-rain/   # NIBS protocol layer (Rust)
+└── pq_ni_blind_signatures/
+    ├── ni-blind-signatures/                  # NIBS protocol layer (Rust)
     │   ├── src/                              # KeyGenS/R, Issue, Obtain, Verify
-    │   └── benches/                          # Criterion benchmarks
-    ├── mayo-c-sys/                           # FFI to MAYO-C
-    ├── mayo-c-rain-sys/                      # FFI to MAYO with RainHash internals
+    │   ├── tests/                            # round trips, sPRP, circuit soundness
+    │   ├── benches/                          # timing harness
+    │   └── bench_results/                    # benchmark output
+    ├── mayo-c-rain-sys/                      # FFI to MAYO with the Rain target
     ├── vole-rainhash-then-mayo-sys/          # FFI to the VOLEitH circuit
     ├── vole/                                 # C++ VOLEitH proof system (FAEST)
     │   ├── faest-cpp-tmp/                    # shared build folder
     │   ├── conservative_bs/                  # circuit definitions
-    │   │   └── owf_proof.inc 
-    |   ├── lowmc_plain/
-    |   |   └── lowmc.cpp               
+    │   │   ├── owf_proof.inc                 # the NIBS relation
+    │   │   ├── nibs_layout.hpp               # witness layout and sizes
+    │   │   └── lowmc_plain/                  # LowMC instances
     │   └── build_consv_bs_rainhash.sh
     ├── MAYO-C/                               # git submodule (CMake)
-    └── bench_rainhash_bs.sh
+    └── bench_rainhash_nibs.sh
 ```
 
 The C and C++ components are built as shared libraries and reached from Rust through `bindgen`-generated foreign function interfaces; the protocol layer itself is Rust. All VOLEitH circuits share one build directory, so the crates cannot be built concurrently.
@@ -74,29 +82,16 @@ Instructions for setting up the build are below. If a build fails after changes 
 
 ### Testing
 
-To benchmark or test the results yourself, do the following ~/pq_ni_blind_signatures/ni-blind-signatures/ 
+To test or benchmark the implementation yourself:
 
 ```
-cd /pq_ni_blind_signatures/ni-blind-signatures/
-RUST_MIN_STACK=8388608 cargo test --test nibs_rain -- --nocapture
-RUST_MIN_STACK=8388608 cargo bench --bench ni_blind_sig_rain
+cd pq_ni_blind_signatures/ni-blind-signatures/
+export RUST_MIN_STACK=8388608
+cargo test --release --test nibs --test sprp --test soundness
+cargo bench --bench nibs
 ```
 
-More information for testing can be found in the README in ~/pq_ni_blind_signatures/ni-blind-signatures/. 
-
-## Results
-
-Single core of an Intel i5-14400F under WSL2, means over 50 executions, single-threaded. One-time LowMC instance generation (22.9 ms) is excluded.
-
-| Phase (ms) | SV1_128 | SV2_128 | FV1_128 | FV2_128 |
-|---|---|---|---|---|
-| KeyGenS | 2.70 | 2.81 | 2.72 | 2.70 |
-| KeyGenR | 0.24 | 0.25 | 0.24 | 0.25 |
-| Issue | 5.83 | 5.99 | 5.81 | 5.82 |
-| Obtain (prove) | 135.85 | 64.56 | 56.95 | 56.45 |
-| Verify | 132.42 | 60.09 | 51.71 | 51.55 |
-| \|σpre\| (KB) | 0.443 | 0.443 | 0.443 | 0.443 |
-| \|σ\| (KB) | **23.69** | 28.27 | 40.53 | 40.50 |
+More information on testing can be found in [`pq_ni_blind_signatures/ni-blind-signatures/README.md`](pq_ni_blind_signatures/ni-blind-signatures/README.md).
 
 ## Credits
 

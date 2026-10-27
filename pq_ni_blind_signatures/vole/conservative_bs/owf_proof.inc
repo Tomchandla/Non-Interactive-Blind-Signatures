@@ -242,7 +242,7 @@ static void enc_constraints_mayo(QS* qs_state, const public_key<P>* pk, unsigned
     qs_state->add_constraint(u + t_embedded);
 }
 
-// The full NIBS relation R((vk, m), (presig, r, K, op/s, salt/-)).
+// The full NIBS relation R((vk, m), (presig = s_M || salt, r, K, op/s)).
 template <typename QS, typename P, owf O>
 static void enc_constraints(QS* qs, const public_key<P>* pk, unsigned char* chall2)
 {
@@ -287,19 +287,14 @@ static void enc_constraints(QS* qs, const public_key<P>* pk, unsigned char* chal
         pkr.assign(c.begin(), c.begin() + 8 * LAY::PKR_BYTES);
     }
 
-    // t = T(M || salt) with M = r || pk_R (BCGY) or pk_R || r (sPRP). In both
-    // cases the signer's nonce lies in the first Rain block, so no chaining
-    // value of T can be precomputed before the nonce is known (see
-    // nibs_layout.hpp).
+    // t = T(M || salt) with M = r || pk_R. The signer's nonce lies in the
+    // first Rain block, so no chaining value of T can be precomputed before
+    // the nonce is known (see nibs_layout.hpp).
     qs_dbg_region = "rain_target";
-    nibs_wires<QS> msg = LAY::NONCE_FIRST ? r : pkr;
-    const nibs_wires<QS>& second = LAY::NONCE_FIRST ? pkr : r;
-    msg.insert(msg.end(), second.begin(), second.end());
-    if constexpr (!LAY::OMM)
-    {
-        const nibs_wires<QS> salt = nibs_witness_wires(qs, LAY::SALT_OFF, 8 * LAY::SALT_BYTES);
-        msg.insert(msg.end(), salt.begin(), salt.end());
-    }
+    nibs_wires<QS> msg = r;
+    msg.insert(msg.end(), pkr.begin(), pkr.end());
+    const nibs_wires<QS> salt = nibs_witness_wires(qs, LAY::SALT_OFF, 8 * LAY::SALT_BYTES);
+    msg.insert(msg.end(), salt.begin(), salt.end());
     const nibs_wires<QS> tbits = nibs_target_wires<QS, LAY>(qs, msg);
 
     constexpr size_t mm = VOLEMAYO_M<S>;

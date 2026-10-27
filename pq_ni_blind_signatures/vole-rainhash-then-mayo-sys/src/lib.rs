@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn every_instance_reports_sizes() {
-        for variant in 0..4u32 {
+        for variant in 0..2u32 {
             for level in [1u32, 3, 5] {
                 for speed in 0..2u32 {
                     for version in 1..=2u32 {
@@ -31,6 +31,6 @@ mod tests {
             }
         }
         let mut info: nibs_instance_info = unsafe { std::mem::zeroed() };
-        assert!(!unsafe { nibs_instance_info_get(4, 1, 0, 1, &mut info) });
+        assert!(!unsafe { nibs_instance_info_get(2, 1, 0, 1, &mut info) });
     }
 }

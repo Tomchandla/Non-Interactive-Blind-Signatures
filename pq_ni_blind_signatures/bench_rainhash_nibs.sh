@@ -1,11 +1,11 @@
 #!/bin/bash
-# Build everything and benchmark the NIBS variants.
+# Build everything and benchmark both NIBS frameworks.
 #
-#   ./bench_rainhash_nibs.sh                 # all 4 variants x 12 VOLEitH sets
+#   ./bench_rainhash_nibs.sh                 # BCGY and sPRP x 12 VOLEitH sets
 #   NIBS_BENCH_ZK=SV1_128,SV1_192,SV1_256 ./bench_rainhash_nibs.sh
-#   NIBS_BENCH_VARIANTS=BCGY+MAYO,sPRP+OMM NIBS_BENCH_ITERS=20 ./bench_rainhash_nibs.sh
+#   NIBS_BENCH_VARIANTS=sPRP NIBS_BENCH_ITERS=20 ./bench_rainhash_nibs.sh
 #
-# Results: ni-blind-signatures/bench_results/{summary.md,summary.csv,<variant>_<set>.txt}
+# Results: ni-blind-signatures/bench_results/{summary.md,summary.csv,<framework>_<set>.txt}
 set -euo pipefail
 cd "$(dirname "$0")"
 

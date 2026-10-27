@@ -265,14 +265,10 @@ constexpr unsigned int owf_algo_em = 2;
 constexpr unsigned int owf_algo_keccak_then_mayo = 4;
 #endif
 #if defined WITH_RAINHASH
-// NIBS variants. All four share the RainHash/LowMC/MAYO machinery; they
-// differ in how pk_R is formed (BCGY commitment vs. sPRP evaluations) and in
-// whether MAYO hashes with a salt (standard) or signs the target directly
-// (One-More-MAYO).
-constexpr unsigned int owf_algo_rainhash_then_mayo = 4; // BCGY + MAYO (original)
-constexpr unsigned int owf_algo_nibs_bcgy_omm = 5;      // BCGY + One-More-MAYO
-constexpr unsigned int owf_algo_nibs_sprp_mayo = 6;     // sPRP + MAYO
-constexpr unsigned int owf_algo_nibs_sprp_omm = 7;      // sPRP + One-More-MAYO
+// NIBS frameworks. Both share the RainHash/LowMC/MAYO machinery and differ
+// only in how pk_R is formed (BCGY RainHash commitment vs. sPRP evaluation).
+constexpr unsigned int owf_algo_rainhash_then_mayo = 4; // BCGY framework
+constexpr unsigned int owf_algo_nibs_sprp = 5;          // sPRP framework (Algorithm 1)
 #endif
 constexpr unsigned int owf_algo_shift = 8;
 constexpr unsigned int owf_flag_zero_sboxes = 0b0001;
@@ -327,10 +323,8 @@ enum class owf : unsigned int
     v2_em = aes_em | owf_flag_zero_sboxes | owf_flag_norm_proof | owf_flag_shrunk_keyspace,
     v2_rainhash_then_mayo = rainhash_then_mayo,
 
-    nibs_bcgy_mayo = rainhash_then_mayo,
-    nibs_bcgy_omm = owf_algo_nibs_bcgy_omm << owf_algo_shift,
-    nibs_sprp_mayo = owf_algo_nibs_sprp_mayo << owf_algo_shift,
-    nibs_sprp_omm = owf_algo_nibs_sprp_omm << owf_algo_shift,
+    nibs_bcgy = rainhash_then_mayo,
+    nibs_sprp = owf_algo_nibs_sprp << owf_algo_shift,
     #endif
 };
 
@@ -355,19 +349,12 @@ constexpr bool is_owf_with_keccak_then_mayo(owf o)
 constexpr bool is_owf_with_rainhash_then_mayo(owf o)
 {
     const auto a = std::to_underlying(o) >> owf_algo_shift;
-    return a >= owf_algo_rainhash_then_mayo && a <= owf_algo_nibs_sprp_omm;
+    return a == owf_algo_rainhash_then_mayo || a == owf_algo_nibs_sprp;
 }
 // pk_R = P_K(0||s) (sPRP framework, Algorithm 1) instead of RainHash(op||K)
 constexpr bool nibs_is_sprp(owf o)
 {
-    const auto a = std::to_underlying(o) >> owf_algo_shift;
-    return a == owf_algo_nibs_sprp_mayo || a == owf_algo_nibs_sprp_omm;
-}
-// MAYO signs the Rain target directly, without salt (One-More-MAYO)
-constexpr bool nibs_is_omm(owf o)
-{
-    const auto a = std::to_underlying(o) >> owf_algo_shift;
-    return a == owf_algo_nibs_bcgy_omm || a == owf_algo_nibs_sprp_omm;
+    return (std::to_underlying(o) >> owf_algo_shift) == owf_algo_nibs_sprp;
 }
 #endif
 
@@ -572,8 +559,8 @@ template <owf O> using nibs_192_s = parameter_set<secpar::s192, 14, O, prg::aes_
 template <owf O> using nibs_192_f = parameter_set<secpar::s192, 24, O, prg::aes_ctr>;
 template <owf O> using nibs_256_s = parameter_set<secpar::s256, 20, O, prg::aes_ctr>;
 template <owf O> using nibs_256_f = parameter_set<secpar::s256, 32, O, prg::aes_ctr>;
-using rainhash_then_mayo_128_s = nibs_128_s<owf::nibs_bcgy_mayo>;
-using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy_mayo>;
+using rainhash_then_mayo_128_s = nibs_128_s<owf::nibs_bcgy>;
+using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy>;
 #endif
     
 } // namespace v1
@@ -612,8 +599,8 @@ template <owf O> using nibs_256_s = parameter_set<secpar::s256, 22, O, prg::aes_
                                     leaf_hash::aes_ctr_stat_bind, 6, {bavc::one_tree, 245}>;
 template <owf O> using nibs_256_f = parameter_set<secpar::s256, 32, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 246}>;
-using rainhash_then_mayo_128_s = nibs_128_s<owf::nibs_bcgy_mayo>;
-using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy_mayo>;
+using rainhash_then_mayo_128_s = nibs_128_s<owf::nibs_bcgy>;
+using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy>;
 #endif
                  
 } // namespace v2
@@ -626,17 +613,15 @@ using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy_mayo>;
 #endif
 
 #if defined WITH_RAINHASH
-// X(P) for every NIBS instance: 4 variants x 3 levels x {s, f} x {v1, v2}.
+// X(P) for every NIBS instance: 2 frameworks x 3 levels x {s, f} x {v1, v2}.
 #define NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, O) \
     X(v1::nibs_128_s<O>) X(v1::nibs_128_f<O>) X(v1::nibs_192_s<O>) X(v1::nibs_192_f<O>) \
     X(v1::nibs_256_s<O>) X(v1::nibs_256_f<O>)                                           \
     X(v2::nibs_128_s<O>) X(v2::nibs_128_f<O>) X(v2::nibs_192_s<O>) X(v2::nibs_192_f<O>) \
     X(v2::nibs_256_s<O>) X(v2::nibs_256_f<O>)
-#define NIBS_FOR_EACH_INSTANCE(X)                               \
-    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_bcgy_mayo)   \
-    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_bcgy_omm)    \
-    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_sprp_mayo)   \
-    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_sprp_omm)
+#define NIBS_FOR_EACH_INSTANCE(X)                          \
+    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_bcgy)   \
+    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_sprp)
 #define ALL_FAEST_V2_INSTANCES v2::rainhash_then_mayo_128_s, v2::rainhash_then_mayo_128_f
 #endif
 

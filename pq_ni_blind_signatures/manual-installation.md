@@ -53,7 +53,7 @@ Step-by-step setup on a clean Ubuntu 24.04 install under WSL2. The build layout 
    * `cd pq_ni_blind_signatures/ni-blind-signatures`
    * `export LIBCLANG_PATH=/usr/lib/llvm-18/lib` (if bindgen does not find libclang)
    * `cargo test --release --test nibs --test sprp --test soundness`
-   * `cargo run --release --example sizes` — sizes of all 48 instances
+   * `cargo run --release --example sizes` — sizes of all 24 instances
    * `cargo bench --bench nibs` — or `../bench_rainhash_nibs.sh`, which does both
 
    Don't run two cargo builds at the same time. They share the meson build
@@ -63,4 +63,4 @@ Step-by-step setup on a clean Ubuntu 24.04 install under WSL2. The build layout 
 9. **Read the results**
 
    Benchmark output is written to `ni-blind-signatures/bench_results/`:
-   `summary.md` / `summary.csv`, plus one `<variant>_<zk>.txt` box per instance.
+   `summary.md` / `summary.csv`, plus one `<framework>_<zk>.txt` box per instance.

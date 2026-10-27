@@ -14,7 +14,7 @@ impl Nibs {
             *nonce.last_mut().unwrap() &= 0x7f;
         }
         let msg = self.presig_message(pk_r, &nonce);
-        let presig = self.mayo.sign_nibs(sk, &msg, self.params.is_one_more());
+        let presig = self.mayo.sign_nibs(sk, &msg);
         debug_assert_eq!(presig.len(), self.presignature_bytes());
         (presig, nonce)
     }

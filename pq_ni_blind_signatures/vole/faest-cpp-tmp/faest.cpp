@@ -1,6 +1,6 @@
 // C entry points for the NIBS VOLEitH proofs and the cleartext helpers.
 //
-// One shared library serves every instance: 4 variants x 3 NIST levels x
+// One shared library serves every instance: 2 frameworks x 3 NIST levels x
 // {s, f} x {v1, v2}. Instances are selected at run time by
 // (variant, level, speed, version); see faest.h.
 
@@ -66,10 +66,8 @@ struct entry
     NIBS_ROW(V, 5, 0, 2, v2::nibs_256_s<O>) NIBS_ROW(V, 5, 1, 2, v2::nibs_256_f<O>)
 
 const entry TABLE[] = {
-    NIBS_ROWS(NIBS_VARIANT_BCGY_MAYO, owf::nibs_bcgy_mayo)
-    NIBS_ROWS(NIBS_VARIANT_BCGY_OMM, owf::nibs_bcgy_omm)
-    NIBS_ROWS(NIBS_VARIANT_SPRP_MAYO, owf::nibs_sprp_mayo)
-    NIBS_ROWS(NIBS_VARIANT_SPRP_OMM, owf::nibs_sprp_omm)
+    NIBS_ROWS(NIBS_VARIANT_BCGY, owf::nibs_bcgy)
+    NIBS_ROWS(NIBS_VARIANT_SPRP, owf::nibs_sprp)
 };
 // clang-format on
 
@@ -83,7 +81,7 @@ const entry* lookup(unsigned variant, unsigned level, unsigned speed, unsigned v
 
 bool is_sprp(unsigned variant)
 {
-    return variant == NIBS_VARIANT_SPRP_MAYO || variant == NIBS_VARIANT_SPRP_OMM;
+    return variant == NIBS_VARIANT_SPRP;
 }
 
 } // namespace

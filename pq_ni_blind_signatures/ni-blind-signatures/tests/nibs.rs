@@ -1,12 +1,12 @@
-// Integration tests for every NIBS variant at every NIST level.
+// Integration tests for both NIBS frameworks at every NIST level.
 //
 //   RUST_MIN_STACK=8388608 cargo test --release --test nibs
 //
-// Set NIBS_TEST_ALL=1 to run the full 48-instance round trip (s/f x v1/v2);
-// by default every variant and level is covered with one VOLEitH set each,
-// and all 48 instances are covered for level 1.
+// Set NIBS_TEST_ALL=1 to run the full 24-instance round trip (s/f x v1/v2);
+// by default both frameworks and every level are covered with one VOLEitH
+// set each, and every VOLEitH set is covered for level 1.
 
-use ni_blind_signatures::{Framework, MayoMode, Nibs, NibsParams, Signature, ZKType};
+use ni_blind_signatures::{Framework, Nibs, NibsParams, Signature, ZKType};
 
 fn instances() -> Vec<NibsParams> {
     if std::env::var("NIBS_TEST_ALL").is_ok() {
@@ -139,8 +139,8 @@ fn messages_are_fresh_per_nonce_and_per_receiver() {
 #[test]
 fn proofs_use_fresh_vole_randomness() {
     for p in [
-        NibsParams::new(Framework::Bcgy, MayoMode::Standard, ZKType::SV1_128),
-        NibsParams::new(Framework::Sprp, MayoMode::OneMore, ZKType::FV2_192),
+        NibsParams::new(Framework::Bcgy, ZKType::SV1_128),
+        NibsParams::new(Framework::Sprp, ZKType::FV2_192),
     ] {
         let s = session(p);
         assert_eq!(s.bs.info.random_seed_bytes * 8, p.zk.lambda());
@@ -175,19 +175,20 @@ fn reported_sizes_match_the_layout() {
         assert_eq!(i.m_bytes, lb);
         assert_eq!(i.pkr_bytes, if p.is_sprp() { lb } else { 2 * lb });
         assert_eq!(i.op_bytes, lb);
-        assert_eq!(i.salt_bytes, if p.is_one_more() { 0 } else { bs.mayo.mayo_params.salt_bytes });
+        assert_eq!(i.salt_bytes, bs.mayo.mayo_params.salt_bytes);
+        assert_eq!(bs.presignature_bytes(), i.s_bytes + i.salt_bytes);
         assert_eq!(i.witness_bits, i.nibs_witness_bits + i.mayo_s_bits);
         assert_eq!(i.lowmc_gadgets, if p.is_sprp() { 2 } else { 1 });
         assert_eq!(i.rain_gadgets, i.target_blocks + if p.is_sprp() { 0 } else { 1 });
     }
 }
 
-/// The MAYO message is M = r || pk_R for BCGY and pk_R || r for sPRP
-/// (Algorithm 1). Either way the nonce lies entirely in the first Rain block
-/// of the target hash, so the receiver cannot precompute any chaining value.
-/// (With BCGY and pk_R first, the 2 lambda-bit pk_R fills the whole first
-/// block at level 5 and two target chains could be merged by a
-/// 2^{(lambda+64)/2} birthday search run before asking for a presignature.)
+/// The MAYO message is M = r || pk_R in both frameworks, so the nonce lies
+/// entirely in the first Rain block of the target hash and the receiver
+/// cannot precompute any chaining value. (With pk_R first, the 2 lambda-bit
+/// BCGY pk_R fills the whole first block at level 5 and two target chains
+/// could be merged by a 2^{(lambda+64)/2} birthday search run before asking
+/// for a presignature.)
 #[test]
 fn presignature_message_puts_the_nonce_in_the_first_rain_block() {
     for zk in [ZKType::FV1_128, ZKType::FV1_192, ZKType::FV1_256] {
@@ -196,12 +197,7 @@ fn presignature_message_puts_the_nonce_in_the_first_rain_block() {
             let (pk_r, _) = bs.keygen_recipient();
             let nonce: Vec<u8> = (0..bs.info.r_bytes as u8).collect();
             let msg = bs.presig_message(&pk_r, &nonce);
-            let expect = if p.is_sprp() {
-                [pk_r.as_slice(), nonce.as_slice()].concat()
-            } else {
-                [nonce.as_slice(), pk_r.as_slice()].concat()
-            };
-            assert_eq!(msg, expect, "[{p}]");
+            assert_eq!(msg, [nonce.as_slice(), pk_r.as_slice()].concat(), "[{p}]");
             let end = msg.windows(nonce.len()).position(|w| w == nonce.as_slice()).unwrap() + nonce.len();
             assert!(end <= 64, "[{p}] nonce ends at byte {end}, past the first Rain block");
         }

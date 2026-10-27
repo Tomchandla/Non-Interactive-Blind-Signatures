@@ -52,8 +52,8 @@ LowMC is the keyed permutation P_K of the NIBS constructions (n = k = λ):
 
 | Variant | Use of LowMC |
 | --- | --- |
-| BCGY (`BCGY+MAYO`, `BCGY+OMM`) | message m = LowMC_K(r); pk_R is a RainHash commitment to K |
-| sPRP (`sPRP+MAYO`, `sPRP+OMM`) | pk_R = LowMC_K(0‖s) and m = LowMC_K(1‖r) (Algorithm 1), with the domain bit in bit λ−1 |
+| BCGY | message m = LowMC_K(r); pk_R is a RainHash commitment to K |
+| sPRP | pk_R = LowMC_K(0‖s) and m = LowMC_K(1‖r) (Algorithm 1), with the domain bit in bit λ−1 |
 
 The VOLEitH prover shows in zero knowledge that it knows a K consistent with the public m (and, inside the witness, with pk_R and the presignature). LowMC is used instead of AES because of its AND count: a full encryption costs 3·m·r ANDs, and in VOLE-in-the-Head only the nonlinear part costs proof size. The gadget commits only the r post-S-box states (r·λ bits).
 
@@ -71,7 +71,7 @@ The round counts are the output of `determine_rounds.py` from the reference repo
 
 `encrypt` and `decrypt` are both implemented, so the forward and inverse oracles of the sPRP definition exist. `tests/sprp.rs` checks that E and D are mutually inverse at every level. The LowMC security claim is the standard single-key block-cipher claim, which is the (strong) PRP game, within the stated data complexity. The claim excludes related-key, known-key and chosen-key settings.
 
-Binding of pk_R to K is a chosen-key property, so the LowMC claim doesn't cover it. The implemented derivation follows the paper's Algorithm 1, pk_R = P_K(0‖s) for a random s. For that derivation, the key-binding property of the paper's Definition 4.4 does not hold for any invertible permutation: pick any K′ and decrypt pk_R. A fixed-input alternative, pk_R = P_K(0‖c0) ‖ P_K(0‖c1), reduces binding to collision resistance of K ↦ (P_K(0‖c0), P_K(0‖c1)). See [`docs/NOTES.md`](../../../docs/NOTES.md) §2.
+The implemented derivations follow the paper's Algorithm 1: pk_R = P_K(0‖s) and m = P_K(1‖r), with s, r ∈ {0,1}^{λ−1} and the domain bit in bit λ−1 of the block. Binding of pk_R to K is a chosen-key property, so the single-key LowMC claim doesn't cover it.
 
 ### File map
 
@@ -83,7 +83,7 @@ Binding of pk_R to K is a chosen-key property, so the LowMC claim doesn't cover 
 
 ## Acknowledgements
 
-The implementation in `pq_blind_signatures/vole/conservative_bs/lowmc_plain` is based in part on the reference implementation of **LowMC**:
+The implementation in `pq_ni_blind_signatures/vole/conservative_bs/lowmc_plain` is based in part on the reference implementation of **LowMC**:
 - https://github.com/LowMC/lowmc
 
 This project uses substantial portions of the original implementation, particularly within `lowmc.cpp`, while modifying and extending the code where necessary to support the requirements of this project. Not all functionality from the original implementation is included.

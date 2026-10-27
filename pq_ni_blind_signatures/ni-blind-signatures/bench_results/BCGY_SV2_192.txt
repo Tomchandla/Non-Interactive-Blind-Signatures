@@ -1,0 +1,20 @@
+┌────────────────────────────────────────────────────────────┐
+│ NIBS BCGY SV2_192  (LowMC + MAYO + RainHash + VOLEitH)     │
+├────────────────────────────────────────────────────────────┤
+│ Phase                               mean over 50 runs      │
+│   KeyGen_S                                      6.832 ms │
+│   KeyGen_R                                      0.245 ms │
+│   Issue                                        14.158 ms │
+│   Obtain (prove)                               89.519 ms │
+│   Verify                                       73.281 ms │
+├────────────────────────────────────────────────────────────┤
+│   presignature |sigma_pre|           0.665 KB       681 B │
+│   signature |sigma|                 50.387 KB     51596 B │
+│   receiver pk_R                      0.047 KB        48 B │
+│   message m                          0.023 KB        24 B │
+│   nonce r                            0.023 KB        24 B │
+├────────────────────────────────────────────────────────────┤
+│   witness 22856 bits = 17664 NIBS + 5192 MAYO s            │
+│   1 LowMC + 4 Rain gadgets (3 for the target), 2913 constraints │
+│   VOLEitH tau = 16                                         │
+└────────────────────────────────────────────────────────────┘

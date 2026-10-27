@@ -39,12 +39,9 @@ pub fn prove(
     assert_eq!(w.s.len(), info.s_bytes);
     assert_eq!(w.key.len(), info.k_bytes);
     assert_eq!(w.nonce.len(), info.r_bytes);
-    assert!(w.opening.len() >= info.op_bytes && w.salt.len() >= info.salt_bytes);
+    assert_eq!(w.opening.len(), info.op_bytes);
+    assert_eq!(w.salt.len(), info.salt_bytes);
     let mut proof = vec![0u8; info.proof_bytes];
-    // empty slices still need a valid pointer for the C side
-    let dummy = [0u8; 1];
-    let op = if w.opening.is_empty() { &dummy[..] } else { w.opening };
-    let salt = if w.salt.is_empty() { &dummy[..] } else { w.salt };
     let ok = unsafe {
         nibs_prove(
             p.variant_id(),
@@ -59,9 +56,9 @@ pub fn prove(
             m.as_ptr(),
             w.s.as_ptr(),
             w.key.as_ptr(),
-            op.as_ptr(),
+            w.opening.as_ptr(),
             w.nonce.as_ptr(),
-            salt.as_ptr(),
+            w.salt.as_ptr(),
             fs_context.as_ptr(),
         )
     };
@@ -101,9 +98,6 @@ pub fn count_unsatisfied(
     w: &Witness<'_>,
     flip_bit: Option<usize>,
 ) -> Option<usize> {
-    let dummy = [0u8; 1];
-    let op = if w.opening.is_empty() { &dummy[..] } else { w.opening };
-    let salt = if w.salt.is_empty() { &dummy[..] } else { w.salt };
     let r = unsafe {
         vole_rainhash_then_mayo_sys::nibs_count_unsatisfied(
             p.variant_id(),
@@ -114,9 +108,9 @@ pub fn count_unsatisfied(
             m.as_ptr(),
             w.s.as_ptr(),
             w.key.as_ptr(),
-            op.as_ptr(),
+            w.opening.as_ptr(),
             w.nonce.as_ptr(),
-            salt.as_ptr(),
+            w.salt.as_ptr(),
             flip_bit.unwrap_or(usize::MAX),
         )
     };

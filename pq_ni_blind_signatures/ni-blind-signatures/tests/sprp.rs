@@ -2,7 +2,7 @@
 //
 //   RUST_MIN_STACK=8388608 cargo test --release --test sprp -- --nocapture
 
-use ni_blind_signatures::{Framework, MayoMode, Nibs, NibsParams, ZKType};
+use ni_blind_signatures::{Framework, Nibs, NibsParams, ZKType};
 use rand::Rng;
 use vole_rainhash_then_mayo_sys::lowmc;
 
@@ -31,11 +31,12 @@ fn lowmc_is_an_invertible_keyed_permutation() {
 
 /// The receiver key and message derivations of the sPRP framework
 /// (Algorithm 1), recomputed from raw LowMC calls:
-/// sk_R = (K, s), pk_R = P_K(0||s), m = P_K(1||r), M = pk_R || r.
+/// sk_R = (K, s), pk_R = P_K(0||s), m = P_K(1||r), with s, r in
+/// {0,1}^{n-1} (top bit of the block = domain bit), and M = r || pk_R.
 #[test]
 fn sprp_derivations_match_algorithm_1() {
     for zk in [ZKType::FV1_128, ZKType::FV1_192, ZKType::FV1_256] {
-        let bs = Nibs::setup(NibsParams::new(Framework::Sprp, MayoMode::Standard, zk));
+        let bs = Nibs::setup(NibsParams::new(Framework::Sprp, zk));
         let level = zk.level();
         let n = lowmc::block_bytes(level);
         let (pk_r, sk_r) = bs.keygen_recipient();
@@ -52,7 +53,15 @@ fn sprp_derivations_match_algorithm_1() {
         // r = s does not make m equal to pk_R
         assert_ne!(bs.derive_message(&sk_r.key, s), pk_r);
 
-        assert_eq!(bs.presig_message(&pk_r, &r), [pk_r.as_slice(), r.as_slice()].concat());
+        assert_eq!(bs.presig_message(&pk_r, &r), [r.as_slice(), pk_r.as_slice()].concat());
+
+        // the signer's nonce is a (n-1)-bit value: top bit 0
+        let (_, sk) = bs.keygen_signer();
+        for _ in 0..16 {
+            let (_, nonce) = bs.issue(&sk, &pk_r);
+            assert_eq!(nonce.len(), n);
+            assert_eq!(nonce.last().unwrap() & 0x80, 0, "r in {{0,1}}^(n-1)");
+        }
     }
 }
 

@@ -21,7 +21,7 @@ impl Nibs {
         }
         let pk_r = self.derive_pkr(sk_r);
         let msg = self.presig_message(&pk_r, nonce);
-        if !self.mayo.verify_nibs(pk, &msg, presig, self.params.is_one_more()) {
+        if !self.mayo.verify_nibs(pk, &msg, presig) {
             return None;
         }
 

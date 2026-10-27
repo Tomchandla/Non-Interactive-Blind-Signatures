@@ -4,7 +4,7 @@
 // C interface of the NIBS VOLEitH library (libconsv_bs_rainhash).
 //
 // An instance is selected by
-//   variant : NIBS_VARIANT_*            (pk_R construction x MAYO mode)
+//   variant : NIBS_VARIANT_*            (BCGY or sPRP framework)
 //   level   : 1, 3 or 5                 (NIST level; lambda = 128/192/256)
 //   speed   : 0 = "s" (small), 1 = "f" (fast)
 //   version : 1 or 2                    (FAEST v1 / v2 VOLEitH parameters)
@@ -22,17 +22,13 @@ extern "C"
 
 enum
 {
-    // BCGY24 framework: pk_R = Rain(op || K), m = LowMC_K(r); MAYO with salt
-    // on M = r || pk_R.
-    NIBS_VARIANT_BCGY_MAYO = 0,
-    // As above, but MAYO signs the Rain target directly (One-More-MAYO).
-    NIBS_VARIANT_BCGY_OMM = 1,
+    // BCGY24 framework: pk_R = Rain(op || K)[0 : 2 lambda], m = LowMC_K(r);
+    // MAYO with salt on M = r || pk_R.
+    NIBS_VARIANT_BCGY = 0,
     // sPRP framework (Algorithm 1): sk_R = (K, s), pk_R = LowMC_K(0||s),
-    // m = LowMC_K(1||r); MAYO with salt on M = pk_R || r. s is passed in the
+    // m = LowMC_K(1||r); MAYO with salt on M = r || pk_R. s is passed in the
     // op argument.
-    NIBS_VARIANT_SPRP_MAYO = 2,
-    // sPRP framework with One-More-MAYO.
-    NIBS_VARIANT_SPRP_OMM = 3,
+    NIBS_VARIANT_SPRP = 1,
 };
 
 typedef struct
@@ -47,7 +43,7 @@ typedef struct
     size_t k_bytes;           // receiver LowMC key K
     size_t r_bytes;           // signer nonce r
     size_t op_bytes;          // BCGY opening op / sPRP randomness s
-    size_t salt_bytes;        // MAYO salt in the witness (0 for One-More-MAYO)
+    size_t salt_bytes;        // MAYO salt in the witness
     size_t pkr_bytes;         // receiver public key pk_R
     size_t m_bytes;           // public message m
     size_t t_bytes;           // MAYO target bytes
@@ -88,8 +84,7 @@ void nibs_derive_pkr(unsigned variant, unsigned level, const uint8_t* K, const u
                      uint8_t* pkr);
 void nibs_derive_message(unsigned variant, unsigned level, const uint8_t* K, const uint8_t* r,
                          uint8_t* m);
-// MAYO target t = T(msg) for msg = M (|| salt), M = r || pk_R (BCGY) or
-// pk_R || r (sPRP).
+// MAYO target t = T(msg) for msg = M || salt, M = r || pk_R.
 void nibs_target(unsigned level, const uint8_t* msg, size_t msg_len, uint8_t* t, size_t t_len);
 
 // One RainHash-512 call (input 64 bytes; first outlen bytes of the output).

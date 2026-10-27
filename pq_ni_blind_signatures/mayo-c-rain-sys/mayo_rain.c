@@ -2,17 +2,14 @@
 //
 // MAYO signing for NIBS presignatures.
 //
-// The message signed is M = r || pk_R (BCGY) or pk_R || r (sPRP), of fixed
-// length per level/variant. The
-// MAYO target is derived with the VOLEitH-friendly Rain mode T implemented in
-// the proof library (nibs_target), never with SHAKE, because T has to be
-// re-proved inside the VOLEitH circuit.
+// The message signed is M = r || pk_R in both frameworks, of fixed length
+// per level and framework. The MAYO target is derived with the
+// VOLEitH-friendly Rain mode T implemented in the proof library
+// (nibs_target), never with SHAKE, because T has to be re-proved inside the
+// VOLEitH circuit:
 //
-//  * standard MAYO:  salt = SHAKE256(M || R || seed_sk),  t = T(M || salt),
-//                    signature = s || salt (as in MAYO round 2);
-//  * One-More-MAYO:  t = T(M), s = SPre(sk, t), signature = s (no salt).
-//    The SPre code follows mayo_without_hashing.c of Baum, Beckmann, Beullens,
-//    Mukherjee, Rechberger (USENIX Security'26 artifact, Apache-2.0).
+//    salt = SHAKE256(M || R || seed_sk),  t = T(M || salt),
+//    signature = s || salt (as in MAYO round 2).
 
 #include <mem.h>
 #include <mayo.h>
@@ -41,7 +38,7 @@ int mayo_nibs_level(const mayo_params_t *p)
     }
 }
 
-// y = target vector for (M [, salt]); tenc gets m_bytes bytes.
+// tenc = T(M || salt), m_bytes bytes.
 static int nibs_target_enc(const mayo_params_t *p, unsigned char *tenc, const unsigned char *m,
                            size_t mlen, const unsigned char *salt, size_t salt_len)
 {
@@ -50,8 +47,7 @@ static int nibs_target_enc(const mayo_params_t *p, unsigned char *tenc, const un
     if (level == 0 || mlen > NIBS_MSG_MAX)
         return MAYO_ERR;
     memcpy(buf, m, mlen);
-    if (salt_len)
-        memcpy(buf + mlen, salt, salt_len);
+    memcpy(buf + mlen, salt, salt_len);
     nibs_target((unsigned)level, buf, mlen + salt_len, tenc, (size_t)PARAM_m_bytes(p));
     return MAYO_OK;
 }
@@ -137,16 +133,16 @@ static int nibs_sample_preimage(const mayo_params_t *p, sk_t *sk, const unsigned
     return found ? MAYO_OK : MAYO_ERR;
 }
 
-int mayo_nibs_sign(const mayo_params_t *p, int omm, unsigned char *sig, size_t *siglen,
+int mayo_nibs_sign(const mayo_params_t *p, unsigned char *sig, size_t *siglen,
                    const unsigned char *m, size_t mlen, const unsigned char *csk)
 {
     int ret;
     alignas(32) sk_t sk;
     unsigned char tenc[M_BYTES_MAX];
     unsigned char salt[SALT_BYTES_MAX];
-    // vseed buffer: (M || salt | tenc) || seed_sk || ctr
-    unsigned char vseed[NIBS_MSG_MAX + SALT_BYTES_MAX + M_BYTES_MAX + SK_SEED_BYTES_MAX + 1];
-    const int param_m_bytes = PARAM_m_bytes(p);
+    unsigned char tmp[NIBS_MSG_MAX + SALT_BYTES_MAX + SK_SEED_BYTES_MAX];
+    // vseed buffer: M || salt || seed_sk || ctr
+    unsigned char vseed[NIBS_MSG_MAX + SALT_BYTES_MAX + SK_SEED_BYTES_MAX + 1];
     const int param_salt_bytes = PARAM_salt_bytes(p);
     const int param_sk_seed_bytes = PARAM_sk_seed_bytes(p);
     const int s_bytes = PARAM_sig_bytes(p) - param_salt_bytes;
@@ -158,56 +154,39 @@ int mayo_nibs_sign(const mayo_params_t *p, int omm, unsigned char *sig, size_t *
     if (ret != MAYO_OK)
         goto err;
 
-    if (omm)
+    // salt = SHAKE256(M || R || seed_sk)
+    memcpy(tmp, m, mlen);
+    if (randombytes(tmp + mlen, param_salt_bytes) != MAYO_OK)
     {
-        // One-More-MAYO: sign the Rain target directly, deterministically.
-        ret = nibs_target_enc(p, tenc, m, mlen, NULL, 0);
-        if (ret != MAYO_OK)
-            goto err;
-        memcpy(vseed, tenc, param_m_bytes);
-        memcpy(vseed + param_m_bytes, csk, param_sk_seed_bytes);
-        vlen = param_m_bytes + param_sk_seed_bytes + 1;
-        ret = nibs_sample_preimage(p, &sk, tenc, vseed, vlen, sig);
-        if (ret == MAYO_OK)
-            *siglen = (size_t)s_bytes;
+        ret = MAYO_ERR;
+        goto err;
     }
-    else
-    {
-        // Standard MAYO with the Rain target: salt = SHAKE256(M || R || seed_sk)
-        unsigned char tmp[NIBS_MSG_MAX + SALT_BYTES_MAX + SK_SEED_BYTES_MAX];
-        memcpy(tmp, m, mlen);
-        if (randombytes(tmp + mlen, param_salt_bytes) != MAYO_OK)
-        {
-            ret = MAYO_ERR;
-            goto err;
-        }
-        memcpy(tmp + mlen + param_salt_bytes, csk, param_sk_seed_bytes);
-        shake256(salt, param_salt_bytes, tmp, mlen + param_salt_bytes + param_sk_seed_bytes);
-        mayo_secure_clear(tmp, sizeof(tmp));
+    memcpy(tmp + mlen + param_salt_bytes, csk, param_sk_seed_bytes);
+    shake256(salt, param_salt_bytes, tmp, mlen + param_salt_bytes + param_sk_seed_bytes);
 
-        ret = nibs_target_enc(p, tenc, m, mlen, salt, param_salt_bytes);
-        if (ret != MAYO_OK)
-            goto err;
-        // V = SHAKE256(M || salt || seed_sk || ctr), as in MAYO
-        memcpy(vseed, m, mlen);
-        memcpy(vseed + mlen, salt, param_salt_bytes);
-        memcpy(vseed + mlen + param_salt_bytes, csk, param_sk_seed_bytes);
-        vlen = mlen + param_salt_bytes + param_sk_seed_bytes + 1;
-        ret = nibs_sample_preimage(p, &sk, tenc, vseed, vlen, sig);
-        if (ret == MAYO_OK)
-        {
-            memcpy(sig + s_bytes, salt, param_salt_bytes);
-            *siglen = (size_t)PARAM_sig_bytes(p);
-        }
+    ret = nibs_target_enc(p, tenc, m, mlen, salt, param_salt_bytes);
+    if (ret != MAYO_OK)
+        goto err;
+    // V = SHAKE256(M || salt || seed_sk || ctr), as in MAYO
+    memcpy(vseed, m, mlen);
+    memcpy(vseed + mlen, salt, param_salt_bytes);
+    memcpy(vseed + mlen + param_salt_bytes, csk, param_sk_seed_bytes);
+    vlen = mlen + param_salt_bytes + param_sk_seed_bytes + 1;
+    ret = nibs_sample_preimage(p, &sk, tenc, vseed, vlen, sig);
+    if (ret == MAYO_OK)
+    {
+        memcpy(sig + s_bytes, salt, param_salt_bytes);
+        *siglen = (size_t)PARAM_sig_bytes(p);
     }
 
 err:
     mayo_secure_clear(&sk, sizeof(sk_t));
+    mayo_secure_clear(tmp, sizeof(tmp));
     mayo_secure_clear(vseed, sizeof(vseed));
     return ret;
 }
 
-int mayo_nibs_verify(const mayo_params_t *p, int omm, const unsigned char *m, size_t mlen,
+int mayo_nibs_verify(const mayo_params_t *p, const unsigned char *m, size_t mlen,
                      const unsigned char *sig, size_t siglen, const unsigned char *cpk)
 {
     unsigned char tEnc[M_BYTES_MAX];
@@ -221,7 +200,7 @@ int mayo_nibs_verify(const mayo_params_t *p, int omm, const unsigned char *m, si
     const int param_salt_bytes = PARAM_salt_bytes(p);
     const size_t s_bytes = (size_t)(PARAM_sig_bytes(p) - param_salt_bytes);
 
-    if (siglen != (omm ? s_bytes : (size_t)PARAM_sig_bytes(p)))
+    if (siglen != (size_t)PARAM_sig_bytes(p))
         return MAYO_ERR;
     if (mayo_expand_pk(p, cpk, pk) != MAYO_OK)
         return MAYO_ERR;
@@ -238,8 +217,7 @@ int mayo_nibs_verify(const mayo_params_t *p, int omm, const unsigned char *m, si
         P3[i] = BSWAP64(P3[i]);
 #endif
 
-    if (nibs_target_enc(p, tEnc, m, mlen, omm ? NULL : sig + s_bytes,
-                        omm ? 0 : (size_t)param_salt_bytes) != MAYO_OK)
+    if (nibs_target_enc(p, tEnc, m, mlen, sig + s_bytes, (size_t)param_salt_bytes) != MAYO_OK)
         return MAYO_ERR;
     decode(tEnc, t, param_m);
     decode(sig, s, param_k * param_n);

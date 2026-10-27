@@ -38,7 +38,7 @@ struct nibs_prover_inputs
     const uint8_t* K;           // receiver LowMC key
     const uint8_t* op;          // BCGY commitment opening op, or sPRP randomness s
     const uint8_t* nonce;       // signer nonce r
-    const uint8_t* salt;        // MAYO salt (ignored for One-More-MAYO)
+    const uint8_t* salt;        // MAYO salt
 };
 
 // Fill the NIBS witness (nibs_layout<S, O>::WITNESS_BYTES) from the secrets.
@@ -54,8 +54,7 @@ template <typename P> void nibs_build_witness(const nibs_prover_inputs& in, uint
     memcpy(w + LAY::OP_OFF / 8, in.op, LAY::OP_BYTES);
     if constexpr (LAY::SPRP)
         w[LAY::OP_OFF / 8 + LAY::OP_BYTES - 1] &= 0x7f; // s: domain bit 0
-    if constexpr (LAY::SALT_BYTES)
-        memcpy(w + LAY::SALT_OFF / 8, in.salt, LAY::SALT_BYTES);
+    memcpy(w + LAY::SALT_OFF / 8, in.salt, LAY::SALT_BYTES);
 
     uint8_t m[32];
     nibs_message(LEVEL, LAY::SPRP, in.K, in.nonce, m, w + LAY::LOWMC_M_OFF / 8);
@@ -66,19 +65,11 @@ template <typename P> void nibs_build_witness(const nibs_prover_inputs& in, uint
     else
         nibs_bcgy_pkr(LEVEL, in.op, in.K, pkr, w + LAY::GADA_OFF / 8);
 
+    // msg = M || salt with M = r || pk_R
     uint8_t msg[LAY::T_MSG_BYTES];
-    if constexpr (LAY::NONCE_FIRST)
-    {
-        memcpy(msg, in.nonce, LAY::R_BYTES);
-        memcpy(msg + LAY::R_BYTES, pkr, LAY::PKR_BYTES);
-    }
-    else
-    {
-        memcpy(msg, pkr, LAY::PKR_BYTES);
-        memcpy(msg + LAY::PKR_BYTES, in.nonce, LAY::R_BYTES);
-    }
-    if constexpr (LAY::SALT_BYTES)
-        memcpy(msg + LAY::R_BYTES + LAY::PKR_BYTES, in.salt, LAY::SALT_BYTES);
+    memcpy(msg, in.nonce, LAY::R_BYTES);
+    memcpy(msg + LAY::R_BYTES, pkr, LAY::PKR_BYTES);
+    memcpy(msg + LAY::R_BYTES + LAY::PKR_BYTES, in.salt, LAY::SALT_BYTES);
     uint8_t t[LAY::T_BYTES];
     nibs_target_hash(LEVEL, msg, LAY::T_MSG_BYTES, t, LAY::T_BYTES, w + LAY::T_OFF / 8);
 }

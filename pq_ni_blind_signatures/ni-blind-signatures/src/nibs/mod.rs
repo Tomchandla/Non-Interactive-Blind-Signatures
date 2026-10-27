@@ -2,16 +2,18 @@
 //! VOLE-in-the-Head.
 //!
 //! ```text
-//! Setup      : pick NibsParams (framework, MAYO mode, VOLEitH set)
+//! Setup      : pick NibsParams (framework, VOLEitH set)
 //! KeyGenS    : (vk, sk) <- MAYO.KeyGen
-//! KeyGenR    : K, op <-$ ; pk_R = Rain(op||K)             (BCGY)
-//!              K, s  <-$ ; pk_R = P_K(0||s)               (sPRP, Algorithm 1)
-//! Issue      : r <-$ ; presig <- MAYO.Sign(sk, M)        (salted or One-More)
-//!              M = r || pk_R (BCGY), pk_R || r (sPRP)
+//! KeyGenR    : K, op <-$ ; pk_R = Rain(op||K)[0:2 lambda]  (BCGY)
+//!              K, s  <-$ ; pk_R = P_K(0||s)                (sPRP, Algorithm 1)
+//! Issue      : r <-$ ; presig <- MAYO.Sign(sk, r || pk_R)  (salted)
 //! Obtain     : check presig; m = P_K(r) (BCGY) / P_K(1||r) (sPRP);
 //!              sigma <- VOLEitH.Prove((vk, m), (presig, r, K, op/s))
 //! Verify     : VOLEitH.Verify((vk, m), sigma)
 //! ```
+//!
+//! In the sPRP framework s and r are drawn from {0,1}^{lambda-1}; they are
+//! stored as lambda-bit blocks whose top bit is the domain bit.
 //!
 //! The Fiat–Shamir transcript of every proof is bound to the statement via
 //! `fs_context = SHAKE256("NIBS-FS-v1" || instance || vk || m)`.
@@ -69,9 +71,7 @@ impl Nibs {
         let mayo = MAYO::setup(mayo_set);
         assert_eq!(mayo.nibs_level(), params.zk.level());
         assert_eq!(info.s_bytes, mayo.mayo_params.sig_bytes - mayo.mayo_params.salt_bytes);
-        if !params.is_one_more() {
-            assert_eq!(info.salt_bytes, mayo.mayo_params.salt_bytes);
-        }
+        assert_eq!(info.salt_bytes, mayo.mayo_params.salt_bytes);
         Self { params, info, mayo }
     }
 
@@ -79,9 +79,9 @@ impl Nibs {
         self.params.zk.level()
     }
 
-    /// Bytes of a presignature: MAYO preimage (+ salt for standard MAYO).
+    /// Bytes of a presignature: MAYO preimage and salt.
     pub fn presignature_bytes(&self) -> usize {
-        self.info.s_bytes + if self.params.is_one_more() { 0 } else { self.mayo.mayo_params.salt_bytes }
+        self.mayo.mayo_params.sig_bytes
     }
 
     pub fn signature_bytes(&self) -> usize {
@@ -92,18 +92,14 @@ impl Nibs {
         self.mayo.expand_pk(pk)
     }
 
-    /// The MAYO message M. sPRP: `pk_R || r`, as in Algorithm 1. BCGY:
-    /// `r || pk_R`, nonce first because pk_R (2 lambda bits) fills the whole
-    /// first Rain block of the target hash at level 5. In both cases the
-    /// first Rain block contains the signer's fresh nonce.
+    /// The MAYO message `M = r || pk_R`, in both frameworks. The nonce comes
+    /// first so that the first Rain block of the target hash contains the
+    /// signer's fresh randomness: a 2 lambda-bit pk_R (BCGY) fills the whole
+    /// first block at level 5. sPRP uses the same order for consistency.
     pub fn presig_message(&self, pk_r: &RecipientPkType, nonce: &NonceType) -> Vec<u8> {
         assert_eq!(pk_r.len(), self.info.pkr_bytes);
         assert_eq!(nonce.len(), self.info.r_bytes);
-        if self.params.is_sprp() {
-            [pk_r.as_slice(), nonce.as_slice()].concat()
-        } else {
-            [nonce.as_slice(), pk_r.as_slice()].concat()
-        }
+        [nonce.as_slice(), pk_r.as_slice()].concat()
     }
 
     /// Fiat–Shamir context binding the instance and the statement (vk, m).

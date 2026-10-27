@@ -1,5 +1,5 @@
-//! Parameter selection: which NIBS construction, which MAYO mode, and which
-//! VOLEitH parameter set (which fixes the NIST level).
+//! Parameter selection: which NIBS framework and which VOLEitH parameter set
+//! (which fixes the NIST level and the MAYO parameter set).
 
 use std::fmt;
 
@@ -7,21 +7,11 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Framework {
     /// Baldimtsi et al. (ASIACRYPT'24) generic construction:
-    /// `pk_R = RainHash(op || K)`, `m = LowMC_K(r)`.
+    /// `pk_R = RainHash(op || K)[0 : 2 lambda]`, `m = LowMC_K(r)`.
     Bcgy,
     /// sPRP framework (Algorithm 1 of the paper): `sk_R = (K, s)`,
-    /// `pk_R = LowMC_K(0||s)`, `m = LowMC_K(1||r)`, MAYO signs `pk_R || r`.
+    /// `pk_R = LowMC_K(0||s)`, `m = LowMC_K(1||r)`.
     Sprp,
-}
-
-/// How MAYO signs `M` (`r || pk_R` for BCGY, `pk_R || r` for sPRP).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum MayoMode {
-    /// MAYO with salt: target `T(M || salt)`; presignature `s || salt`.
-    Standard,
-    /// One-More-MAYO (Baum et al., USENIX'26): preimage of `T(M)`, no
-    /// salt. Security rests on one-more preimage resistance of the MAYO map.
-    OneMore,
 }
 
 /// VOLEitH parameter set: s(mall)/f(ast), FAEST v1/v2, security level.
@@ -121,22 +111,19 @@ impl ZKType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NibsParams {
     pub framework: Framework,
-    pub mayo_mode: MayoMode,
     pub zk: ZKType,
 }
 
 impl NibsParams {
-    pub const fn new(framework: Framework, mayo_mode: MayoMode, zk: ZKType) -> Self {
-        Self { framework, mayo_mode, zk }
+    pub const fn new(framework: Framework, zk: ZKType) -> Self {
+        Self { framework, zk }
     }
 
     /// Variant id understood by the C library (`NIBS_VARIANT_*`).
     pub fn variant_id(&self) -> u32 {
-        match (self.framework, self.mayo_mode) {
-            (Framework::Bcgy, MayoMode::Standard) => 0,
-            (Framework::Bcgy, MayoMode::OneMore) => 1,
-            (Framework::Sprp, MayoMode::Standard) => 2,
-            (Framework::Sprp, MayoMode::OneMore) => 3,
+        match self.framework {
+            Framework::Bcgy => 0,
+            Framework::Sprp => 1,
         }
     }
 
@@ -144,31 +131,20 @@ impl NibsParams {
         self.framework == Framework::Sprp
     }
 
-    pub fn is_one_more(&self) -> bool {
-        self.mayo_mode == MayoMode::OneMore
-    }
-
-    /// Short label, e.g. `BCGY+MAYO` or `sPRP+OMM`.
+    /// Short label: `BCGY` or `sPRP`.
     pub fn variant_label(&self) -> &'static str {
-        match (self.framework, self.mayo_mode) {
-            (Framework::Bcgy, MayoMode::Standard) => "BCGY+MAYO",
-            (Framework::Bcgy, MayoMode::OneMore) => "BCGY+OMM",
-            (Framework::Sprp, MayoMode::Standard) => "sPRP+MAYO",
-            (Framework::Sprp, MayoMode::OneMore) => "sPRP+OMM",
+        match self.framework {
+            Framework::Bcgy => "BCGY",
+            Framework::Sprp => "sPRP",
         }
     }
 
-    /// Every variant for one VOLEitH parameter set.
-    pub fn variants(zk: ZKType) -> [NibsParams; 4] {
-        [
-            NibsParams::new(Framework::Bcgy, MayoMode::Standard, zk),
-            NibsParams::new(Framework::Bcgy, MayoMode::OneMore, zk),
-            NibsParams::new(Framework::Sprp, MayoMode::Standard, zk),
-            NibsParams::new(Framework::Sprp, MayoMode::OneMore, zk),
-        ]
+    /// Both frameworks for one VOLEitH parameter set.
+    pub fn variants(zk: ZKType) -> [NibsParams; 2] {
+        [NibsParams::new(Framework::Bcgy, zk), NibsParams::new(Framework::Sprp, zk)]
     }
 
-    /// All 48 instances.
+    /// All 24 instances.
     pub fn all() -> Vec<NibsParams> {
         ZKType::ALL.iter().flat_map(|&z| NibsParams::variants(z)).collect()
     }
