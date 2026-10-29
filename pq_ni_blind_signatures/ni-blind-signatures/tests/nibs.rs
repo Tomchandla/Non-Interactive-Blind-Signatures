@@ -5,6 +5,8 @@
 // Set NIBS_TEST_ALL=1 to run the full 24-instance round trip (s/f x v1/v2);
 // by default both frameworks and every level are covered with one VOLEitH
 // set each, and every VOLEitH set is covered for level 1.
+// 
+// Unnecessary to run all of them, hence why FV1 is used to speed up test suite.
 
 use ni_blind_signatures::{Framework, Nibs, NibsParams, Signature, ZKType};
 
@@ -36,6 +38,7 @@ fn session(p: NibsParams) -> Session {
     Session { bs, pk, sk, epk }
 }
 
+// sanity check
 #[test]
 fn round_trip_every_variant_and_level() {
     for p in instances() {
@@ -94,6 +97,7 @@ fn verification_rejects_modified_statement_or_proof() {
     }
 }
 
+// Ensure B cannot sign a presignature that was intended for A.
 #[test]
 fn obtain_rejects_foreign_or_altered_presignatures() {
     for p in NibsParams::variants(ZKType::FV1_128) {
@@ -113,6 +117,7 @@ fn obtain_rejects_foreign_or_altered_presignatures() {
     }
 }
 
+// Ensures nonces are fresh.
 #[test]
 fn messages_are_fresh_per_nonce_and_per_receiver() {
     for p in NibsParams::variants(ZKType::FV1_128) {
@@ -133,9 +138,7 @@ fn messages_are_fresh_per_nonce_and_per_receiver() {
     }
 }
 
-// Regression test for the constant VOLE seed of the previous implementation:
-// proofs from different receivers shared their whole VOLE commitment and the
-// witness correction d = u ^ w exposed w1 ^ w2.
+// Ensures the randomly chosen constant VOLE seed is fresh for two instantiations
 #[test]
 fn proofs_use_fresh_vole_randomness() {
     for p in [
