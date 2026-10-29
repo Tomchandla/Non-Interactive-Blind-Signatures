@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//
-// MAYO signing for NIBS presignatures.
-//
-// The message signed is M = r || pk_R in both frameworks, of fixed length
-// per level and framework. The MAYO target is derived with the
-// VOLEitH-friendly Rain mode T implemented in the proof library
-// (nibs_target), never with SHAKE, because T has to be re-proved inside the
-// VOLEitH circuit:
-//
-//    salt = SHAKE256(M || R || seed_sk),  t = T(M || salt),
-//    signature = s || salt (as in MAYO round 2).
+// Modified for multiple chains of Rain to replace shake proof.
 
 #include <mem.h>
 #include <mayo.h>
@@ -154,7 +144,7 @@ int mayo_nibs_sign(const mayo_params_t *p, unsigned char *sig, size_t *siglen,
     if (ret != MAYO_OK)
         goto err;
 
-    // salt = SHAKE256(M || R || seed_sk)
+    // salt = shake256(M || R || seed_sk)
     memcpy(tmp, m, mlen);
     if (randombytes(tmp + mlen, param_salt_bytes) != MAYO_OK)
     {
@@ -167,7 +157,7 @@ int mayo_nibs_sign(const mayo_params_t *p, unsigned char *sig, size_t *siglen,
     ret = nibs_target_enc(p, tenc, m, mlen, salt, param_salt_bytes);
     if (ret != MAYO_OK)
         goto err;
-    // V = SHAKE256(M || salt || seed_sk || ctr), as in MAYO
+    // V = shake256(M || salt || seed_sk || ctr)
     memcpy(vseed, m, mlen);
     memcpy(vseed + mlen, salt, param_salt_bytes);
     memcpy(vseed + mlen + param_salt_bytes, csk, param_sk_seed_bytes);
