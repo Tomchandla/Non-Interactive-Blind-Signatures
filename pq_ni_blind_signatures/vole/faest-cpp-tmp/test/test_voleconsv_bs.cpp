@@ -1,12 +1,10 @@
-// Unit tests for the cleartext building blocks of the NIBS circuits.
-// End-to-end prove/verify tests live in the Rust crate (tests/nibs.rs).
-
 #include <array>
 #include <cstring>
 #include <random>
 
 #include <catch2/catch_test_macros.hpp>
 
+// faest files (removed some since we don't need keccak)
 #include "faest.h"
 #include "lowmc_plain/lowmc.hpp"
 #include "parameters.hpp"
