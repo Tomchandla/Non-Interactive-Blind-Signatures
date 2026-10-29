@@ -1,6 +1,4 @@
-// LowMC as a strong PRP, and the key-binding question of the sPRP framework.
-//
-//   RUST_MIN_STACK=8388608 cargo test --release --test sprp -- --nocapture
+// LowMC as a strong PRP.
 
 use ni_blind_signatures::{Framework, Nibs, NibsParams, ZKType};
 use rand::Rng;
@@ -11,8 +9,6 @@ fn random_bytes(n: usize) -> Vec<u8> {
     (0..n).map(|_| rng.random()).collect()
 }
 
-/// E_K is a permutation of {0,1}^n for every K and E_K^{-1} is efficient:
-/// both oracles of the sPRP game exist.
 #[test]
 fn lowmc_is_an_invertible_keyed_permutation() {
     lowmc::init();
@@ -29,12 +25,8 @@ fn lowmc_is_an_invertible_keyed_permutation() {
     }
 }
 
-/// The receiver key and message derivations of the sPRP framework
-/// (Algorithm 1), recomputed from raw LowMC calls:
-/// sk_R = (K, s), pk_R = P_K(0||s), m = P_K(1||r), with s, r in
-/// {0,1}^{n-1} (top bit of the block = domain bit), and M = r || pk_R.
 #[test]
-fn sprp_derivations_match_algorithm_1() {
+fn sprp_derivations_match() {
     for zk in [ZKType::FV1_128, ZKType::FV1_192, ZKType::FV1_256] {
         let bs = Nibs::setup(NibsParams::new(Framework::Sprp, zk));
         let level = zk.level();
@@ -52,7 +44,6 @@ fn sprp_derivations_match_algorithm_1() {
         // the domain bit separates messages from the pk_R input: choosing
         // r = s does not make m equal to pk_R
         assert_ne!(bs.derive_message(&sk_r.key, s), pk_r);
-
         assert_eq!(bs.presig_message(&pk_r, &r), [r.as_slice(), pk_r.as_slice()].concat());
 
         // the signer's nonce is a (n-1)-bit value: top bit 0
@@ -65,16 +56,8 @@ fn sprp_derivations_match_algorithm_1() {
     }
 }
 
-/// Definition 4.4 (key binding) asks that no adversary finds
-/// (K, s) != (K', s') with P_K(0||s) = P_K'(0||s'). For any keyed
-/// permutation whose inverse is efficient given the key -- which is exactly
-/// what a strong PRP provides -- this fails: pick K' and decrypt.
-///
-/// In Algorithm 1 this yields a one-more forgery: one presignature on
-/// r || pk_R verifies for every opening (K', s') of pk_R, and each opening
-/// gives a different message m' = P_K'(1||r).
 #[test]
-fn definition_4_4_key_binding_fails_for_any_invertible_permutation() {
+fn Key_binding_fails_for_any_invertible_permutation() {
     lowmc::init();
     let level = 1;
     let n = lowmc::block_bytes(level);
