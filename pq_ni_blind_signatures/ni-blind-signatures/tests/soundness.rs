@@ -1,9 +1,5 @@
-// Circuit-level checks with the constraint evaluator (no proofs involved):
-// the honest witness satisfies every constraint, and mismatched secrets or a
-// single flipped witness bit do not.
-//
-//   RUST_MIN_STACK=8388608 cargo test --release --test soundness -- --nocapture
-//   NIBS_SOUNDNESS_EXHAUSTIVE=1 ... flips every witness bit of both frameworks at SV1_128
+// Checks that an honest witness satisfies every constraint, 
+// and mismatched secrets or a single flipped witness bit does not.
 
 use ni_blind_signatures::zk::{count_unsatisfied, Witness};
 use ni_blind_signatures::{Nibs, NibsParams, RecipientSk, ZKType};
@@ -34,6 +30,7 @@ fn unsat(f: &Fixture, key: &[u8], nonce: &[u8], m: &[u8], flip: Option<usize>) -
     count_unsatisfied(&f.bs.params, &f.epk, m, &w, flip).expect("valid instance")
 }
 
+// The honest witness satisfies every constraint, for all 24 instances.
 #[test]
 fn honest_witness_satisfies_every_instance() {
     for p in NibsParams::all() {
@@ -42,6 +39,7 @@ fn honest_witness_satisfies_every_instance() {
     }
 }
 
+// Another receiver's key, a different nonce or a wrong public message each break the relation.
 #[test]
 fn mismatched_secrets_are_rejected() {
     for zk in [ZKType::SV1_128, ZKType::FV1_192, ZKType::FV1_256] {
@@ -74,6 +72,7 @@ fn mismatched_secrets_are_rejected() {
     }
 }
 
+// Flipping any of 64 sampled witness bits (4 boundary bits + 60 random) breaks at least one constraint.
 #[test]
 fn every_sampled_witness_bit_is_load_bearing() {
     let mut rng = rand::rng();
@@ -93,6 +92,7 @@ fn every_sampled_witness_bit_is_load_bearing() {
     }
 }
 
+// Flips every witness bit at level 1 for both frameworks (slow: needs NIBS_SOUNDNESS_EXHAUSTIVE=1 and --ignored).
 #[test]
 #[ignore]
 fn exhaustive_bit_flips_level1() {
