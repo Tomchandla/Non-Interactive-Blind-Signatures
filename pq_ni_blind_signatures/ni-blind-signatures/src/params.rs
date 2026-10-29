@@ -6,11 +6,9 @@ use std::fmt;
 /// How the receiver public key binds the receiver's LowMC key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Framework {
-    /// Baldimtsi et al. (ASIACRYPT'24) generic construction:
-    /// `pk_R = RainHash(op || K)[0 : 2 lambda]`, `m = LowMC_K(r)`.
+    /// Generic construction:
     Bcgy,
-    /// sPRP framework (Algorithm 1 of the paper): `sk_R = (K, s)`,
-    /// `pk_R = LowMC_K(0||s)`, `m = LowMC_K(1||r)`.
+    /// Our construction:
     Sprp,
 }
 
@@ -119,7 +117,6 @@ impl NibsParams {
         Self { framework, zk }
     }
 
-    /// Variant id understood by the C library (`NIBS_VARIANT_*`).
     pub fn variant_id(&self) -> u32 {
         match self.framework {
             Framework::Bcgy => 0,
