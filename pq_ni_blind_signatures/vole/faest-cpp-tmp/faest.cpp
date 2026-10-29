@@ -1,8 +1,4 @@
-// C entry points for the NIBS VOLEitH proofs and the cleartext helpers.
-//
-// One shared library serves every instance: 2 frameworks x 3 NIST levels x
-// {s, f} x {v1, v2}. Instances are selected at run time by
-// (variant, level, speed, version); see faest.h.
+//Removed all keccak stuff from original and modified RainHash variant to work with NIBS
 
 #include "faest.h"
 #include "faest.inc"
