@@ -106,8 +106,7 @@ struct quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>
     combine_1_bit(const quicksilver_gf2<quicksilver, deg>* qs_bits);
 };
 
-// Debug instrumentation. thread_local so parallel provers (cargo test's
-// default, criterion) each keep their own count instead of racing one global.
+// Debug
 inline thread_local const char* qs_dbg_region = "?";
 inline thread_local size_t qs_dbg_idx = 0, qs_dbg_fails = 0;
 inline thread_local bool qs_soft_check = false;
