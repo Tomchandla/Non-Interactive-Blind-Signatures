@@ -1,23 +1,3 @@
-//! Non-interactive blind signatures from MAYO, LowMC, RainHash and
-//! VOLE-in-the-Head.
-//!
-//! ```text
-//! Setup      : pick NibsParams (framework, VOLEitH set)
-//! KeyGenS    : (vk, sk) <- MAYO.KeyGen
-//! KeyGenR    : K, op <-$ ; pk_R = Rain(op||K)[0:2 lambda]  (BCGY)
-//!              K, s  <-$ ; pk_R = P_K(0||s)                (sPRP, Algorithm 1)
-//! Issue      : r <-$ ; presig <- MAYO.Sign(sk, r || pk_R)  (salted)
-//! Obtain     : check presig; m = P_K(r) (BCGY) / P_K(1||r) (sPRP);
-//!              sigma <- VOLEitH.Prove((vk, m), (presig, r, K, op/s))
-//! Verify     : VOLEitH.Verify((vk, m), sigma)
-//! ```
-//!
-//! In the sPRP framework s and r are drawn from {0,1}^{lambda-1}; they are
-//! stored as lambda-bit blocks whose top bit is the domain bit.
-//!
-//! The Fiat–Shamir transcript of every proof is bound to the statement via
-//! `fs_context = SHAKE256("NIBS-FS-v1" || instance || vk || m)`.
-
 use crate::params::NibsParams;
 use crate::zk::{self, InstanceInfo};
 use mayo_c_rain_sys::mayo::{MAYO, MAYOParameterSet};
@@ -32,7 +12,7 @@ pub mod verify;
 pub type PkType = Vec<u8>;
 /// MAYO compressed secret key.
 pub type SkType = Vec<u8>;
-/// MAYO expanded public key (what the circuit consumes; cache it per signer).
+/// MAYO expanded public key.
 pub type EPkType = Vec<u8>;
 pub type RecipientPkType = Vec<u8>;
 pub type NonceType = Vec<u8>;
@@ -92,10 +72,7 @@ impl Nibs {
         self.mayo.expand_pk(pk)
     }
 
-    /// The MAYO message `M = r || pk_R`, in both frameworks. The nonce comes
-    /// first so that the first Rain block of the target hash contains the
-    /// signer's fresh randomness: a 2 lambda-bit pk_R (BCGY) fills the whole
-    /// first block at level 5. sPRP uses the same order for consistency.
+    /// The MAYO message `M = r || pk_R`.
     pub fn presig_message(&self, pk_r: &RecipientPkType, nonce: &NonceType) -> Vec<u8> {
         assert_eq!(pk_r.len(), self.info.pkr_bytes);
         assert_eq!(nonce.len(), self.info.r_bytes);
