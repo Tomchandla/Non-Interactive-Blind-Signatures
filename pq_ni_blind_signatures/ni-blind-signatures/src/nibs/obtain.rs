@@ -3,8 +3,8 @@ use crate::zk::{self, Witness};
 use rand::Rng;
 
 impl Nibs {
-    /// Obtain: returns None (the scheme's ⊥) if the presignature does not
-    /// verify for M (see `presig_message`); otherwise derives m and proves the relation.
+    /// Obtain: returns None if the presignature does not verify for M
+    /// otherwise derives m and proves the relation.
     ///
     /// `epk` is the signer's expanded MAYO key (`expand_pk(pk)`), which the
     /// receiver can cache across obtains.
