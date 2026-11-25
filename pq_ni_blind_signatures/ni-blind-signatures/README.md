@@ -5,9 +5,9 @@ Rust implementation of the non-interactive blind signature: KeyGen_S, KeyGen_R, 
 | Framework | pk_R | message m | presignature |
 |---|---|---|---|
 | `BCGY` | ⌊RH(op ‖ K ‖ fill)⌋_2λ | LowMC_K(r) | salted MAYO on M = r ‖ pk_R |
-| `sPRP` | LowMC_K(0 ‖ s) | LowMC_K(1 ‖ r) | salted MAYO on M = r ‖ pk_R |
+| `sPRP` | LowMC_K(00 ‖ s) ‖ LowMC_K(01 ‖ s) | LowMC_K(1 ‖ r) | salted MAYO on M = r ‖ pk_R |
 
-In the sPRP framework (Algorithm 1), s and r are drawn from {0,1}^(λ−1); the top bit of the λ-bit block is the domain bit.
+In the sPRP framework, s is drawn from {0,1}^(λ−2) and r from {0,1}^(λ−1); the top bits of each λ-bit block are domain bits. pk_R is 2λ bits: a single block LowMC_K(0 ‖ s) can be reopened under any other key by inverting LowMC, which breaks one-more unforgeability.
 
 ```rust
 use ni_blind_signatures::{Framework, Nibs, NibsParams, ZKType};
@@ -35,7 +35,7 @@ NIBS_SOUNDNESS_EXHAUSTIVE=1 cargo test --release --test soundness -- --ignored  
 ```
 
 * `tests/nibs.rs` covers round trips, rejection of modified statements, proofs and presignatures, fresh VOLE randomness, size bookkeeping and the nonce-first message encoding.
-* `tests/sprp.rs` covers LowMC as an invertible keyed permutation, the sPRP derivations, and the counterexample to the paper's Definition 4.4.
+* `tests/sprp.rs` covers LowMC as an invertible keyed permutation, the sPRP derivations, why a single-block pk_R is not key-binding, and that the two-block pk_R resists the same inversion.
 * `tests/soundness.rs` evaluates the circuit directly, without proofs: honest witnesses satisfy it, and wrong secrets or flipped witness bits do not.
 
 ## Sizes and benchmarks

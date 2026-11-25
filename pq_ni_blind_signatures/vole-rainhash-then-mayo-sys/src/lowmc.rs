@@ -36,7 +36,7 @@ pub fn decrypt(level: u32, key: &[u8], ct: &[u8]) -> Vec<u8> {
 }
 
 /// pk_R for the given variant: `op` is the BCGY opening, or the sPRP
-/// randomness s (pk_R = P_K(0||s)).
+/// randomness s (pk_R = P_K(00||s) || P_K(01||s)).
 pub fn derive_pkr(variant: u32, level: u32, key: &[u8], op: &[u8], pkr_bytes: usize) -> Vec<u8> {
     let mut pkr = vec![0u8; pkr_bytes];
     unsafe { nibs_derive_pkr(variant, level, key.as_ptr(), op.as_ptr(), pkr.as_mut_ptr()) };

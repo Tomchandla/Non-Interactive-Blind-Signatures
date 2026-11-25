@@ -173,12 +173,12 @@ fn reported_sizes_match_the_layout() {
         assert_eq!(i.k_bytes, lb);
         assert_eq!(i.r_bytes, lb);
         assert_eq!(i.m_bytes, lb);
-        assert_eq!(i.pkr_bytes, if p.is_sprp() { lb } else { 2 * lb });
+        assert_eq!(i.pkr_bytes, 2 * lb);
         assert_eq!(i.op_bytes, lb);
         assert_eq!(i.salt_bytes, bs.mayo.mayo_params.salt_bytes);
         assert_eq!(bs.presignature_bytes(), i.s_bytes + i.salt_bytes);
         assert_eq!(i.witness_bits, i.nibs_witness_bits + i.mayo_s_bits);
-        assert_eq!(i.lowmc_gadgets, if p.is_sprp() { 2 } else { 1 });
+        assert_eq!(i.lowmc_gadgets, if p.is_sprp() { 3 } else { 1 });
         assert_eq!(i.rain_gadgets, i.target_blocks + if p.is_sprp() { 0 } else { 1 });
     }
 }

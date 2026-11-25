@@ -53,7 +53,7 @@ template <typename P> void nibs_build_witness(const nibs_prover_inputs& in, uint
     memcpy(w + LAY::R_OFF / 8, in.nonce, LAY::R_BYTES);
     memcpy(w + LAY::OP_OFF / 8, in.op, LAY::OP_BYTES);
     if constexpr (LAY::SPRP)
-        w[LAY::OP_OFF / 8 + LAY::OP_BYTES - 1] &= 0x7f; // s: domain bit 0
+        w[LAY::OP_OFF / 8 + LAY::OP_BYTES - 1] &= 0x3f; // s: domain bits 00
     memcpy(w + LAY::SALT_OFF / 8, in.salt, LAY::SALT_BYTES);
 
     uint8_t m[32];

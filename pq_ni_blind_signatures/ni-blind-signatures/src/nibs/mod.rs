@@ -44,7 +44,7 @@ pub struct RecipientSk {
     /// LowMC key K (lambda bits)
     pub key: Vec<u8>,
     /// BCGY: commitment opening op. sPRP: receiver randomness s, with its
-    /// top (domain) bit 0. lambda bits in both cases.
+    /// top two (domain) bits 00. lambda bits in both cases.
     pub opening: Vec<u8>,
 }
 

@@ -266,13 +266,18 @@ static void enc_constraints(QS* qs, const public_key<P>* pk, unsigned char* chal
     nibs_wires<QS> pkr;
     if constexpr (LAY::SPRP)
     {
-        // pk_R = LowMC_K(0 || s): the witness slot holds s with its top bit,
-        // the domain bit, constrained to 0 (Algorithm 1, KeyGen_R).
+        // pk_R = LowMC_K(00 || s) || LowMC_K(01 || s): the witness slot holds
+        // s with its top two bits, the domain bits, constrained to 0.
         qs_dbg_region = "lowmc_pk";
         const nibs_wires<QS> s = nibs_witness_wires(qs, LAY::OP_OFF, N);
         const uint8_t zero = 0;
-        nibs_assert_bits_equal_const(qs, &s[N - 1], &zero, 1);
+        nibs_assert_bits_equal_const(qs, &s[N - 2], &zero, 2);
         pkr = nibs_lowmc_gadget<QS, LEVEL>(qs, K, s, LAY::LOWMC_PK_OFF);
+        nibs_wires<QS> s01 = s;
+        s01[N - 2] = nibs_const_wire(qs, 1);
+        const nibs_wires<QS> pkr_hi =
+            nibs_lowmc_gadget<QS, LEVEL>(qs, K, s01, LAY::LOWMC_PK_OFF + LAY::LOWMC_STATE_BITS);
+        pkr.insert(pkr.end(), pkr_hi.begin(), pkr_hi.end());
     }
     else
     {

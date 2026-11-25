@@ -17,7 +17,7 @@ impl Nibs {
         let key: Vec<u8> = (0..self.info.k_bytes).map(|_| rng.random()).collect();
         let mut opening: Vec<u8> = (0..self.info.op_bytes).map(|_| rng.random()).collect();
         if self.params.is_sprp() {
-            *opening.last_mut().unwrap() &= 0x7f;
+            *opening.last_mut().unwrap() &= 0x3f; // domain bits 00
         }
         let sk = RecipientSk { key, opening };
         (self.derive_pkr(&sk), sk)

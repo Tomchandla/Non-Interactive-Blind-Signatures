@@ -1,6 +1,4 @@
-// LowMC as a strong PRP, and the key-binding question of the sPRP framework.
-//
-//   RUST_MIN_STACK=8388608 cargo test --release --test sprp -- --nocapture
+// LowMC as a strong PRP.
 
 use ni_blind_signatures::{Framework, Nibs, NibsParams, ZKType};
 use rand::Rng;
@@ -11,8 +9,6 @@ fn random_bytes(n: usize) -> Vec<u8> {
     (0..n).map(|_| rng.random()).collect()
 }
 
-/// E_K is a permutation of {0,1}^n for every K and E_K^{-1} is efficient:
-/// both oracles of the sPRP game exist.
 #[test]
 fn lowmc_is_an_invertible_keyed_permutation() {
     lowmc::init();
@@ -29,12 +25,8 @@ fn lowmc_is_an_invertible_keyed_permutation() {
     }
 }
 
-/// The receiver key and message derivations of the sPRP framework
-/// (Algorithm 1), recomputed from raw LowMC calls:
-/// sk_R = (K, s), pk_R = P_K(0||s), m = P_K(1||r), with s, r in
-/// {0,1}^{n-1} (top bit of the block = domain bit), and M = r || pk_R.
 #[test]
-fn sprp_derivations_match_algorithm_1() {
+fn sprp_derivations_match() {
     for zk in [ZKType::FV1_128, ZKType::FV1_192, ZKType::FV1_256] {
         let bs = Nibs::setup(NibsParams::new(Framework::Sprp, zk));
         let level = zk.level();
@@ -42,17 +34,21 @@ fn sprp_derivations_match_algorithm_1() {
         let (pk_r, sk_r) = bs.keygen_recipient();
         let s = &sk_r.opening;
         assert_eq!(s.len(), n);
-        assert_eq!(s.last().unwrap() & 0x80, 0, "s in {{0,1}}^(n-1): domain bit 0");
-        assert_eq!(pk_r, lowmc::encrypt(level, &sk_r.key, s), "pk_R = P_K(0||s)");
+        assert_eq!(s.last().unwrap() & 0xc0, 0, "s in {{0,1}}^(n-2): domain bits 00");
+        let mut s01 = s.clone();
+        *s01.last_mut().unwrap() |= 0x40;
+        let expected = [lowmc::encrypt(level, &sk_r.key, s), lowmc::encrypt(level, &sk_r.key, &s01)].concat();
+        assert_eq!(pk_r, expected, "pk_R = P_K(00||s) || P_K(01||s)");
 
         let r = random_bytes(n);
         let mut pt = r.clone();
         *pt.last_mut().unwrap() |= 0x80; // domain bit 1 for messages
         assert_eq!(bs.derive_message(&sk_r.key, &r), lowmc::encrypt(level, &sk_r.key, &pt));
-        // the domain bit separates messages from the pk_R input: choosing
-        // r = s does not make m equal to pk_R
-        assert_ne!(bs.derive_message(&sk_r.key, s), pk_r);
-
+        // the domain bits separate messages from the pk_R inputs: choosing
+        // r = s does not make m equal to either pk_R block
+        let m_s = bs.derive_message(&sk_r.key, s);
+        assert_ne!(m_s.as_slice(), &pk_r[..n]);
+        assert_ne!(m_s.as_slice(), &pk_r[n..]);
         assert_eq!(bs.presig_message(&pk_r, &r), [r.as_slice(), pk_r.as_slice()].concat());
 
         // the signer's nonce is a (n-1)-bit value: top bit 0
@@ -65,16 +61,12 @@ fn sprp_derivations_match_algorithm_1() {
     }
 }
 
-/// Definition 4.4 (key binding) asks that no adversary finds
-/// (K, s) != (K', s') with P_K(0||s) = P_K'(0||s'). For any keyed
-/// permutation whose inverse is efficient given the key -- which is exactly
-/// what a strong PRP provides -- this fails: pick K' and decrypt.
-///
-/// In Algorithm 1 this yields a one-more forgery: one presignature on
-/// r || pk_R verifies for every opening (K', s') of pk_R, and each opening
-/// gives a different message m' = P_K'(1||r).
+/// Why pk_R has two blocks: a single block P_K(0||s) is opened under any
+/// other key K' by inverting, s' = P_{K'}^{-1}(pk_R), whenever the top bit of
+/// s' is 0 (probability 1/2). That second opening turns one presignature into
+/// two messages.
 #[test]
-fn definition_4_4_key_binding_fails_for_any_invertible_permutation() {
+fn single_block_pkr_is_not_key_binding() {
     lowmc::init();
     let level = 1;
     let n = lowmc::block_bytes(level);
@@ -84,22 +76,41 @@ fn definition_4_4_key_binding_fails_for_any_invertible_permutation() {
     let pk_r = lowmc::encrypt(level, &k, &s);
 
     let mut openings = Vec::new();
-    let mut tries = 0;
     while openings.len() < 8 {
-        tries += 1;
         let k2 = random_bytes(n);
         let x = lowmc::decrypt(level, &k2, &pk_r);
         if x.last().unwrap() & 0x80 == 0 {
-            // x = 0||s' : (K', s') opens the same pk_R
             assert_eq!(lowmc::encrypt(level, &k2, &x), pk_r);
-            openings.push((k2, x));
+            openings.push(k2);
         }
     }
-    println!("found {} second openings of pk_R = P_K(0||s) in {} tries", openings.len(), tries);
-    let r = random_bytes(n);
-    let mut pt = r.clone();
+    let mut pt = random_bytes(n);
     *pt.last_mut().unwrap() |= 0x80;
     let msgs: std::collections::HashSet<Vec<u8>> =
-        openings.iter().map(|(k2, _)| lowmc::encrypt(level, k2, &pt)).collect();
+        openings.iter().map(|k2| lowmc::encrypt(level, k2, &pt)).collect();
     assert_eq!(msgs.len(), openings.len(), "each opening derives a distinct message");
+}
+
+/// The same inversion against the two-block pk_R: a key K' fixes s' from the
+/// first block, and the second block then matches only with probability
+/// 2^{-lambda}.
+#[test]
+fn inverting_one_block_does_not_open_the_two_block_pkr() {
+    let bs = Nibs::setup(NibsParams::new(Framework::Sprp, ZKType::FV1_128));
+    let level = 1;
+    let n = lowmc::block_bytes(level);
+    let (pk_r, _) = bs.keygen_recipient();
+    let (lo, hi) = pk_r.split_at(n);
+    let mut tried = 0;
+    for _ in 0..1000 {
+        let k2 = random_bytes(n);
+        let mut x = lowmc::decrypt(level, &k2, lo);
+        if x.last().unwrap() & 0xc0 != 0 {
+            continue; // not of the form 00||s'
+        }
+        tried += 1;
+        *x.last_mut().unwrap() |= 0x40;
+        assert_ne!(lowmc::encrypt(level, &k2, &x).as_slice(), hi, "second block matched");
+    }
+    assert!(tried > 0);
 }

@@ -6,15 +6,21 @@
 //
 //   framework   pk_R                                   message m (lambda bits)    signed M
 //   BCGY        Rain(op || K || 0xff..)[0 : 2 lambda]   LowMC_K(r)                 r || pk_R
-//   sPRP        LowMC_K(0 || s), s in {0,1}^{lambda-1}  LowMC_K(1 || r)            r || pk_R
+//   sPRP        LowMC_K(00 || s) || LowMC_K(01 || s),   LowMC_K(1 || r)            r || pk_R
+//               s in {0,1}^{lambda-2}
 //
-// The sPRP framework follows Algorithm 1 of the paper: sk_R = (K, s),
-// pk_R = P_K(0||s) (one lambda-bit block) and m = P_K(1||r) with
-// r in {0,1}^{lambda-1}. s and r are stored as lambda-bit blocks whose top
-// bit is the domain bit: the circuit constrains the top bit of s to 0 and
-// replaces the top bit of r by 1 (the signer samples r with top bit 0, so
-// the r inside every signed M is a (lambda-1)-bit nonce). The randomness s
-// occupies the witness slot of the BCGY opening op.
+// The sPRP framework: sk_R = (K, s), pk_R = P_K(00||s) || P_K(01||s) (two
+// lambda-bit blocks, 2 lambda bits) and m = P_K(1||r) with r in
+// {0,1}^{lambda-1}. A single block P_K(0||s) is not binding: for any key K',
+// P_{K'}^{-1}(pk_R) has top bit 0 with probability 1/2, so (K', s') opens the
+// same pk_R and one presignature yields two messages. With two blocks, a key
+// K' fixes s' from the first block and matches the second only with
+// probability 2^{-lambda}. s and r are stored as lambda-bit blocks whose top
+// bits are domain bits: the circuit constrains the top two bits of s to 0,
+// sets the second-highest bit to 1 for the second pk_R block, and replaces
+// the top bit of r by 1 (the signer samples r with top bit 0, so the r inside
+// every signed M is a (lambda-1)-bit nonce). The randomness s occupies the
+// witness slot of the BCGY opening op.
 //
 // MAYO presignature: MAYO.Sign(sk, M) with salt, i.e. a preimage of the
 // target t = T(M || salt); the presignature is s_M || salt.
@@ -36,12 +42,12 @@
 // ~2^160 work at level 5. With r in the first block every chaining value
 // depends on the signer's fresh randomness, and moving an issued
 // presignature to another message is a second-preimage problem on >= c
-// bits. The sPRP pk_R is only lambda bits, so the attack does not apply
-// there; it uses the same order for consistency.
+// bits. Both frameworks have a 2 lambda-bit pk_R, so this order matters for
+// both.
 //
 // Witness (bit offsets, all byte aligned), in this order:
 //   K | r | op (BCGY) or s (sPRP) | salt
-//   | LowMC states for m | LowMC states for pk_R (sPRP only)
+//   | LowMC states for m | LowMC states for the two pk_R blocks (sPRP only)
 //   | Rain states for pk_R (BCGY only) | Rain states for T (one per block)
 //   | MAYO preimage s_M
 // A LowMC gadget commits its ROUNDS post-S-box states; a Rain gadget commits
@@ -84,10 +90,10 @@ template <secpar S, owf O> struct nibs_layout
     // ---- object sizes (bytes) --------------------------------------------
     static constexpr std::size_t K_BYTES = LAMBDA / 8;
     static constexpr std::size_t R_BYTES = LAMBDA / 8;
-    // BCGY: commitment opening op. sPRP: receiver randomness s (top bit 0).
+    // BCGY: commitment opening op. sPRP: receiver randomness s (top two bits 00).
     static constexpr std::size_t OP_BYTES = LAMBDA / 8;
     static constexpr std::size_t SALT_BYTES = VOLEMAYO_SALT_BYTES<S>;
-    static constexpr std::size_t PKR_BYTES = SPRP ? LAMBDA / 8 : 2 * LAMBDA / 8;
+    static constexpr std::size_t PKR_BYTES = 2 * LAMBDA / 8; // both frameworks
     static constexpr std::size_t M_BYTES = LAMBDA / 8;
     static constexpr std::size_t T_BYTES = L::T_BYTES;
 
@@ -102,7 +108,7 @@ template <secpar S, owf O> struct nibs_layout
     static_assert(T_BYTES <= 2 * VOLERAINHASH_B_BYTES);
 
     // ---- gadget counts ---------------------------------------------------
-    static constexpr std::size_t LOWMC_GADGETS = SPRP ? 2 : 1;
+    static constexpr std::size_t LOWMC_GADGETS = SPRP ? 3 : 1;
     static constexpr std::size_t RAIN_GADGETS = (SPRP ? 0 : 1) + T_BLOCKS;
     static constexpr std::size_t LOWMC_STATE_BITS = L::lowmc::ROUNDS * LAMBDA;
 
@@ -112,7 +118,8 @@ template <secpar S, owf O> struct nibs_layout
     static constexpr std::size_t OP_OFF = R_OFF + 8 * R_BYTES;
     static constexpr std::size_t SALT_OFF = OP_OFF + 8 * OP_BYTES;
     static constexpr std::size_t LOWMC_M_OFF = SALT_OFF + 8 * SALT_BYTES;
-    static constexpr std::size_t LOWMC_PK_OFF = LOWMC_M_OFF + LOWMC_STATE_BITS; // sPRP
+    // sPRP: the two pk_R gadgets (00||s, then 01||s) follow the message gadget.
+    static constexpr std::size_t LOWMC_PK_OFF = LOWMC_M_OFF + LOWMC_STATE_BITS;
     static constexpr std::size_t GADA_OFF = LOWMC_M_OFF + LOWMC_GADGETS * LOWMC_STATE_BITS; // BCGY
     static constexpr std::size_t T_OFF = GADA_OFF + (SPRP ? 0 : NIBS_RAIN_STATE_BITS);
     static constexpr std::size_t WITNESS_BITS = T_OFF + T_BLOCKS * NIBS_RAIN_STATE_BITS;
@@ -126,11 +133,11 @@ template <secpar S, owf O> struct nibs_layout
     // ---- constraints emitted ---------------------------------------------
     //  LowMC: ROUNDS * lambda each (3 per S-box + identity bits)
     //  public m: lambda
-    //  sPRP: 1 (top bit of s is the domain bit 0)
+    //  sPRP: 2 (top two bits of s are the domain bits 00)
     //  Rain: 7 S-boxes * 4 lanes * LANE_COORDS each
     //  MAYO: 1 (all equations batched with a random embedding)
     static constexpr std::size_t NUM_CONSTRAINTS = LOWMC_GADGETS * LOWMC_STATE_BITS + LAMBDA +
-                                                   (SPRP ? 1 : 0) +
+                                                   (SPRP ? 2 : 0) +
                                                    RAIN_GADGETS * VOLERAINHASH_NUM_ROUNDS * 4 *
                                                        L::LANE_COORDS +
                                                    1;

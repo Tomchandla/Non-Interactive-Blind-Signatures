@@ -16,7 +16,7 @@ Both frameworks are implemented at NIST levels 1, 3 and 5:
 | Framework | Receiver key pk_R | Message m | Presignature |
 |---|---|---|---|
 | BCGY | ⌊RH(op ‖ K ‖ fill)⌋_2λ | LowMC_K(r) | salted MAYO on M = r ‖ pk_R |
-| sPRP | LowMC_K(0 ‖ s) | LowMC_K(1 ‖ r) | salted MAYO on M = r ‖ pk_R |
+| sPRP | LowMC_K(00 ‖ s) ‖ LowMC_K(01 ‖ s) | LowMC_K(1 ‖ r) | salted MAYO on M = r ‖ pk_R |
 
 ## Project Structure
 
