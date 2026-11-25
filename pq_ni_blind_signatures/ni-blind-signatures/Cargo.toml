@@ -1,14 +1,22 @@
 [package]
-name = "blind-signatures-conservative-rain"
-version = "0.1.0"
+name = "ni-blind-signatures"
+version = "0.2.0"
 edition = "2024"
+
+[lib]
+name = "ni_blind_signatures"
 
 [dependencies]
 mayo-c-rain-sys = { path = "../mayo-c-rain-sys" }
 vole-rainhash-then-mayo-sys = { path = "../vole-rainhash-then-mayo-sys" }
-criterion = {version = "0.6", features = ["html_reports"]}
 rand = "0.9.2"
 
+[dev-dependencies]
+criterion = { version = "0.6", features = ["html_reports"] }
+
 [[bench]]
-name = "ni_blind_sig_rain"
+name = "nibs"
 harness = false
+
+[profile.test]
+opt-level = 3

@@ -110,6 +110,7 @@ struct quicksilver_gfsecpar<quicksilver_state<S, false, max_deg>, deg>
 // default, criterion) each keep their own count instead of racing one global.
 inline thread_local const char* qs_dbg_region = "?";
 inline thread_local size_t qs_dbg_idx = 0, qs_dbg_fails = 0;
+inline thread_local bool qs_soft_check = false;
 
 template <secpar S, size_t max_deg, size_t deg> requires (deg <= max_deg)
 struct quicksilver_gf2<quicksilver_state<S, false, max_deg>, deg>
@@ -623,20 +624,21 @@ public:
         }
         else
         {
-            // TODO: clean up debug code
-            // uint64_t tmp = 0;
-            // memcpy(&tmp, &x_max.value().data, sizeof(tmp));
-            // std::cout << "should b 0: " << std::hex << std::setw(16) << std::setfill('0') << tmp << "\n";
             ++qs_dbg_idx;
-#ifdef QS_DEBUG_CONSTRAINTS
-            if (!(x_max.value() == poly_secpar<S>::set_zero())) {
+            if (!(x_max.value() == poly_secpar<S>::set_zero()))
+            {
                 ++qs_dbg_fails;
-                fprintf(stderr, "UNSAT deg=%d local#%zu region=%s\n",
-                        (int)deg, qs_dbg_idx, qs_dbg_region);
-            }
+#ifdef QS_DEBUG_CONSTRAINTS
+                fprintf(stderr, "UNSAT deg=%d local#%zu region=%s\n", (int)deg, qs_dbg_idx,
+                        qs_dbg_region);
 #endif
-            assert(x_max.value() == poly_secpar<S>::set_zero());
-            FAEST_ASSERT(x_max.value() == poly_secpar<S>::set_zero());
+                // An honest prover never gets here; the constraint checker
+                // (nibs_count_unsatisfied) sets qs_soft_check to count instead.
+                if (!qs_soft_check)
+                {
+                    assert(false && "unsatisfied QuickSilver constraint");
+                }
+            }
             for (size_t i = 0; i < max_degree; ++i)
             {
                 state_secpar[i].update(&key_secpar, x_max.mac.coeffs[i]);

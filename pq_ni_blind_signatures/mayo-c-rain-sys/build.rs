@@ -23,6 +23,11 @@ fn main() {
         "cargo:rustc-env=LD_LIBRARY_PATH=target/debug:../vole-rainhash-then-mayo-sys/target/debug"
     );
 
+    println!("cargo:rerun-if-changed=mayo_rain.c");
+    println!("cargo:rerun-if-changed=mayo_rain.h");
+    println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=../vole/conservative_bs/faest.h");
+
     // Generate bindings, but exclude the iteratively generated bindings
     // for openssl and the system functions
     let bindings = bindgen::Builder::default()

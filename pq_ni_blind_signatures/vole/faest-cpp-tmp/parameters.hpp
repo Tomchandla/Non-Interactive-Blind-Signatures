@@ -1,5 +1,3 @@
-#define WITH_RAINHASH
-#define PLUS_MAYO
 #ifndef PARAMETERS_HPP
 #define PARAMETERS_HPP
 
@@ -8,9 +6,6 @@
 #include <utility>
 #include <array>
 
-#if defined WITH_RAINHASH
-#include "lowmc_plain/lowmc_params.hpp"
-#endif
 
 #define DEBUG_MODE 1
 
@@ -251,61 +246,13 @@ constexpr std::size_t VOLEKECCAK_MAYO_HASH_INPUT_BYTES =  VOLEMAYO_DIGEST_BYTES<
 #endif
 
 #if defined WITH_RAINHASH
-constexpr std::size_t VOLERAINHASH_ONE_ROUND_RC_SIZE_BYTES = 64;
-constexpr std::size_t VOLERAINHASH_RC_SIZE_BITS = 64*7 * 8;
-constexpr std::size_t VOLERAINHASH_MAT_SIZE_BITS = 64*512*7 * 8;
-constexpr std::size_t VOLERAINHASH_RC_SIZE_BYTES = VOLERAINHASH_RC_SIZE_BITS / 8;
-constexpr std::size_t VOLERAINHASH_MAT_SIZE_BYTES = VOLERAINHASH_MAT_SIZE_BITS / 8; 
-
-constexpr std::size_t VOLERAINHASH_SBOX_SIZE = 512;
+// RainHash-512 (7 rounds, Davies-Meyer feed-forward) as used by every NIBS
+// variant. The NIBS witness layout lives in nibs_layout.hpp (included after
+// the owf enum below), because it depends on the variant.
 constexpr std::size_t VOLERAINHASH_B = 512;
-constexpr std::size_t VOLERAINHASH_B_BYTES = (VOLERAINHASH_B + 7)/8;
+constexpr std::size_t VOLERAINHASH_B_BYTES = VOLERAINHASH_B / 8;
 constexpr std::size_t VOLERAINHASH_NUM_ROUNDS = 7;
-constexpr std::size_t VOLERAINHASH_RATE = 512;
-constexpr std::size_t VOLERAINHASH_RATE_BYTES = (VOLERAINHASH_RATE+7)/8;
-constexpr std::size_t VOLERAINHASH_CAPACITY = VOLERAINHASH_B - VOLERAINHASH_RATE;
-constexpr std::size_t VOLERAINHASH_PK_OUTPUT_BYTES = 0;
-constexpr std::size_t VOLERAINHASH_PUBLIC_SIZE_BYTES = VOLERAINHASH_PK_OUTPUT_BYTES + VOLERAINHASH_RC_SIZE_BYTES + VOLERAINHASH_MAT_SIZE_BYTES;  // pk output
-
-// NIBS constants: MIXED LowMC + Rain circuit
-constexpr uint8_t RAIN_CAP16[16]  = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-                                     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
-
-#include "parameters_lowmc.hpp"
-
-template <secpar S>
-constexpr std::size_t VOLERAINHASH_WITNESS_SIZE_BITS = NIBS_MIXED_WITNESS_BITS;
-
-template <secpar S>  
-constexpr std::size_t VOLERAINHASH_WITNESS_SIZE_BYTES = (VOLERAINHASH_WITNESS_SIZE_BITS<S> + 7)/8;
-
-template <secpar S>  
-constexpr std::size_t VOLERAINHASH_SECRET_SIZE_BYTES = VOLERAINHASH_PUBLIC_SIZE_BYTES + VOLERAINHASH_WITNESS_SIZE_BYTES<S>;
-
-// // Rain L3
-// constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BITS_L3 = 384;  // Digest_bytes = 48 bytes
-// constexpr std::size_t VOLERAINHASH_COMMIT_MU_SIZE_BYTES_L3 = 24;
-// // Rain L5
-// constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BITS_L5 = 512;  // Digest_bytes = 64 bytes
-// constexpr std::size_t VOLERAINHASH_COMMIT_MU_SIZE_BYTES_L5 = 32;
-
-// template <secpar S>
-// constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BITS = (secpar_to_bytes(S) == 16 ? VOLERAINHASH_OUTPUT_LEN_BITS_L1 : 
-//                                                     (secpar_to_bytes(S) == 24 ? VOLERAINHASH_OUTPUT_LEN_BITS_L3 : VOLERAINHASH_OUTPUT_LEN_BITS_L5));
-// // NOTE: This is the output len that is actually used further in the protocol, rest from the rate we just ignore, but used in the proof
-// template <secpar S>
-// constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BYTES = (VOLERAINHASH_OUTPUT_LEN_BITS<S> + 7)/8;
-// template <secpar S>
-// constexpr std::size_t VOLERAINHASH_COMMIT_MU_SIZE_BYTES = (secpar_to_bytes(S) == 16 ? VOLERAINHASH_COMMIT_MU_SIZE_BYTES_L1 : 
-//                                                         (secpar_to_bytes(S) == 24 ? VOLERAINHASH_COMMIT_MU_SIZE_BYTES_L3 : VOLERAINHASH_COMMIT_MU_SIZE_BYTES_L5));
-
-template <secpar S>
-constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BITS = 512;
-// NOTE: This is the output len that is actually used further in the protocol, rest from the rate we just ignore, but used in the proof
-template <secpar S>
-constexpr std::size_t VOLERAINHASH_OUTPUT_LEN_BYTES = (VOLERAINHASH_OUTPUT_LEN_BITS<S> + 7)/8;
-template <secpar S>
-constexpr std::size_t VOLERAINHASH_COMMIT_MU_SIZE_BYTES = 16;
+constexpr std::size_t VOLERAINHASH_ONE_ROUND_RC_SIZE_BYTES = 64;
 #endif
 
 
@@ -318,7 +265,10 @@ constexpr unsigned int owf_algo_em = 2;
 constexpr unsigned int owf_algo_keccak_then_mayo = 4;
 #endif
 #if defined WITH_RAINHASH
-constexpr unsigned int owf_algo_rainhash_then_mayo = 4;
+// NIBS frameworks. Both share the RainHash/LowMC/MAYO machinery and differ
+// only in how pk_R is formed (BCGY RainHash commitment vs. sPRP evaluation).
+constexpr unsigned int owf_algo_rainhash_then_mayo = 4; // BCGY framework
+constexpr unsigned int owf_algo_nibs_sprp = 5;          // sPRP framework (Algorithm 1)
 #endif
 constexpr unsigned int owf_algo_shift = 8;
 constexpr unsigned int owf_flag_zero_sboxes = 0b0001;
@@ -372,6 +322,9 @@ enum class owf : unsigned int
          owf_flag_ctr_input,
     v2_em = aes_em | owf_flag_zero_sboxes | owf_flag_norm_proof | owf_flag_shrunk_keyspace,
     v2_rainhash_then_mayo = rainhash_then_mayo,
+
+    nibs_bcgy = rainhash_then_mayo,
+    nibs_sprp = owf_algo_nibs_sprp << owf_algo_shift,
     #endif
 };
 
@@ -395,7 +348,13 @@ constexpr bool is_owf_with_keccak_then_mayo(owf o)
 #if defined WITH_RAINHASH
 constexpr bool is_owf_with_rainhash_then_mayo(owf o)
 {
-    return (std::to_underlying(o) >> owf_algo_shift) == owf_algo_rainhash_then_mayo;
+    const auto a = std::to_underlying(o) >> owf_algo_shift;
+    return a == owf_algo_rainhash_then_mayo || a == owf_algo_nibs_sprp;
+}
+// pk_R = P_K(0||s) (sPRP framework, Algorithm 1) instead of RainHash(op||K)
+constexpr bool nibs_is_sprp(owf o)
+{
+    return (std::to_underlying(o) >> owf_algo_shift) == owf_algo_nibs_sprp;
 }
 #endif
 
@@ -594,12 +553,14 @@ using keccak_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v1_keccak_th
 #endif
 
 #if defined WITH_RAINHASH
-using rainhash_then_mayo_128_s = parameter_set<secpar::s128, 9, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
-using rainhash_then_mayo_128_f = parameter_set<secpar::s128, 16, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
-using rainhash_then_mayo_192_s = parameter_set<secpar::s192, 14, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
-using rainhash_then_mayo_192_f = parameter_set<secpar::s192, 24, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
-using rainhash_then_mayo_256_s = parameter_set<secpar::s256, 20, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
-using rainhash_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v1_rainhash_then_mayo, prg::aes_ctr>;
+template <owf O> using nibs_128_s = parameter_set<secpar::s128, 9, O, prg::aes_ctr>;
+template <owf O> using nibs_128_f = parameter_set<secpar::s128, 16, O, prg::aes_ctr>;
+template <owf O> using nibs_192_s = parameter_set<secpar::s192, 14, O, prg::aes_ctr>;
+template <owf O> using nibs_192_f = parameter_set<secpar::s192, 24, O, prg::aes_ctr>;
+template <owf O> using nibs_256_s = parameter_set<secpar::s256, 20, O, prg::aes_ctr>;
+template <owf O> using nibs_256_f = parameter_set<secpar::s256, 32, O, prg::aes_ctr>;
+using rainhash_then_mayo_128_s = nibs_128_s<owf::nibs_bcgy>;
+using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy>;
 #endif
     
 } // namespace v1
@@ -626,18 +587,20 @@ using keccak_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v2_keccak_th
 #endif
 
 #if defined WITH_RAINHASH
-using rainhash_then_mayo_128_s = parameter_set<secpar::s128, 11, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
+template <owf O> using nibs_128_s = parameter_set<secpar::s128, 11, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 7, {bavc::one_tree, 102}>;
-using rainhash_then_mayo_128_f = parameter_set<secpar::s128, 16, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
+template <owf O> using nibs_128_f = parameter_set<secpar::s128, 16, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 110}>;
-using rainhash_then_mayo_192_s = parameter_set<secpar::s192, 16, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
+template <owf O> using nibs_192_s = parameter_set<secpar::s192, 16, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 12, {bavc::one_tree, 162}>;
-using rainhash_then_mayo_192_f = parameter_set<secpar::s192, 24, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
+template <owf O> using nibs_192_f = parameter_set<secpar::s192, 24, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 163}>;
-using rainhash_then_mayo_256_s = parameter_set<secpar::s256, 22, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
+template <owf O> using nibs_256_s = parameter_set<secpar::s256, 22, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 6, {bavc::one_tree, 245}>;
-using rainhash_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v2_rainhash_then_mayo, prg::aes_ctr, prg::aes_ctr,
+template <owf O> using nibs_256_f = parameter_set<secpar::s256, 32, O, prg::aes_ctr, prg::aes_ctr,
                                     leaf_hash::aes_ctr_stat_bind, 8, {bavc::one_tree, 246}>;
+using rainhash_then_mayo_128_s = nibs_128_s<owf::nibs_bcgy>;
+using rainhash_then_mayo_128_f = nibs_128_f<owf::nibs_bcgy>;
 #endif
                  
 } // namespace v2
@@ -650,14 +613,24 @@ using rainhash_then_mayo_256_f = parameter_set<secpar::s256, 32, owf::v2_rainhas
 #endif
 
 #if defined WITH_RAINHASH
-// Macro listing all instances, useful to instantiate tests with all parameter sets
-#define ALL_FAEST_V2_INSTANCES                                                                     \
-    v2::rainhash_then_mayo_128_s,                 \
-    v2::rainhash_then_mayo_128_f, v2::rainhash_then_mayo_192_s, v2::rainhash_then_mayo_192_f, v2::rainhash_then_mayo_256_s, v2::rainhash_then_mayo_256_f
+// X(P) for every NIBS instance: 2 frameworks x 3 levels x {s, f} x {v1, v2}.
+#define NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, O) \
+    X(v1::nibs_128_s<O>) X(v1::nibs_128_f<O>) X(v1::nibs_192_s<O>) X(v1::nibs_192_f<O>) \
+    X(v1::nibs_256_s<O>) X(v1::nibs_256_f<O>)                                           \
+    X(v2::nibs_128_s<O>) X(v2::nibs_128_f<O>) X(v2::nibs_192_s<O>) X(v2::nibs_192_f<O>) \
+    X(v2::nibs_256_s<O>) X(v2::nibs_256_f<O>)
+#define NIBS_FOR_EACH_INSTANCE(X)                          \
+    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_bcgy)   \
+    NIBS_FOR_EACH_INSTANCE_OF_VARIANT(X, owf::nibs_sprp)
+#define ALL_FAEST_V2_INSTANCES v2::rainhash_then_mayo_128_s, v2::rainhash_then_mayo_128_f
 #endif
 
 #define ALL_FAEST_INSTANCES ALL_FAEST_V2_INSTANCES
 
 } // namespace faest
+
+#if defined WITH_RAINHASH
+#include "nibs_layout.hpp"
+#endif
 
 #endif
